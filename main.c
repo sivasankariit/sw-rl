@@ -12,7 +12,7 @@ static char *dev;
 MODULE_PARM_DESC(dev, "Interface to operate prl.");
 module_param(dev, charp, 0);
 
-static int rate;
+static int rate=1000;
 MODULE_PARM_DESC(dev, "Ratelimit in Mb/s.");
 module_param(rate, int, 0);
 
