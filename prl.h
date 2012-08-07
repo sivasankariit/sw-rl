@@ -18,15 +18,11 @@ enum iso_verdict {
 struct iso_rl_queue {
 	struct sk_buff_head list;
 	int first_pkt_size;
-
 	u64 bytes_enqueued;
 	u64 bytes_xmit;
-	u64 feedback_backlog;
-
 	u64 tokens;
-	spinlock_t spinlock;
-
 	int cpu;
+
 	struct iso_rl *rl;
 	struct hrtimer *cputimer;
 	struct list_head active_list;
@@ -47,8 +43,10 @@ struct iso_rl_cb {
 	struct hrtimer timer;
 	struct tasklet_struct xmit_timeout;
 	struct list_head active_list;
+#ifdef DEBUG
 	ktime_t last;
 	u64 avg_us;
+#endif
 	int cpu;
 };
 

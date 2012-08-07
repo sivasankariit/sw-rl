@@ -32,8 +32,11 @@ int iso_rl_prep() {
 		tasklet_init(&cb->xmit_timeout, iso_rl_xmit_tasklet, (unsigned long)cb);
 		INIT_LIST_HEAD(&cb->active_list);
 
+#ifdef DEBUG
 		cb->last = ktime_get();
 		cb->avg_us = 0;
+#endif
+
 		cb->cpu = cpu;
 	}
 
@@ -55,7 +58,6 @@ void iso_rl_exit(void) {
 void iso_rl_xmit_tasklet(unsigned long _cb) {
 	struct iso_rl_cb *cb = (struct iso_rl_cb *)_cb;
 	struct iso_rl_queue *q, *qtmp, *first;
-	ktime_t last;
 	ktime_t dt;
 	int count = 0;
 
@@ -64,10 +66,15 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 	if(iso_exiting)
 		return;
 
+#ifdef DEBUG
+  {
 	/* This block is not needed, but just for debugging purposes */
-	last = cb->last;
-	cb->last = ktime_get();
-	cb->avg_us = ktime_us_delta(cb->last, last);
+    ktime_t last;
+    last = cb->last;
+    cb->last = ktime_get();
+    cb->avg_us = ktime_us_delta(cb->last, last);
+  }
+#endif
 
 	first = list_entry(cb->active_list.next, struct iso_rl_queue, active_list);
 
@@ -110,10 +117,7 @@ int iso_rl_init(struct iso_rl *rl) {
 		q->bytes_enqueued = 0;
 		q->bytes_xmit = 0;
 
-		q->feedback_backlog = 0;
 		q->tokens = 0;
-
-		spin_lock_init(&q->spinlock);
 
 		q->cpu = i;
 		q->rl = rl;
@@ -149,9 +153,9 @@ void iso_rl_show(struct iso_rl *rl, struct seq_file *s) {
 		q = per_cpu_ptr(rl->queue, i);
 
 		if(q->tokens > 0 || skb_queue_len(&q->list) > 0) {
-			seq_printf(s, "\t%3d   %3d   %3d   %10llu   %6llu   %10llu   %d,%d\n",
+			seq_printf(s, "\t%3d   %3d   %3d   %10llu   %10llu   %d,%d\n",
 					   i, skb_queue_len(&q->list), q->first_pkt_size,
-					   q->bytes_enqueued, q->feedback_backlog, q->tokens,
+					   q->bytes_enqueued, q->tokens,
 					   !list_empty(&q->active_list), hrtimer_active(q->cputimer));
 		}
 	}
