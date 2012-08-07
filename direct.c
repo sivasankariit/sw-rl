@@ -56,6 +56,11 @@ int iso_tx_hook_init() {
 
 	ops = (struct net_device_ops *)iso_netdev->netdev_ops;
 
+	if(ops == NULL) {
+		printk(KERN_INFO "device %s has no ops\n", iso_netdev->name);
+		return 1;
+	}
+
 	rtnl_lock();
 	old_ndo_start_xmit = ops->ndo_start_xmit;
 	ops->ndo_start_xmit = iso_ndo_start_xmit;
