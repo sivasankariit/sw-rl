@@ -2,7 +2,7 @@
 #include "prl.h"
 
 struct iso_rl_cb __percpu *rlcb;
-struct iso_rl prl;
+struct iso_rl *prl;
 extern int iso_exiting;
 
 int ISO_TOKENBUCKET_TIMEOUT_NS=50*1000;
@@ -39,6 +39,12 @@ int iso_rl_prep() {
 
 		cb->cpu = cpu;
 	}
+
+  prl = kmalloc(sizeof(*prl), GFP_KERNEL);
+  if(prl == NULL) {
+    free_percpu(rlcb);
+    return -1;
+  }
 
 	return 0;
 }

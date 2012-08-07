@@ -87,8 +87,8 @@ netdev_tx_t iso_ndo_start_xmit(struct sk_buff *skb, struct net_device *out) {
 	HARD_TX_UNLOCK(iso_netdev, txq);
 
 	skb_reset_mac_header(skb);
-	verdict = iso_rl_enqueue(&prl, skb, cpu);
-	q = per_cpu_ptr(prl.queue, cpu);
+	verdict = iso_rl_enqueue(prl, skb, cpu);
+	q = per_cpu_ptr(prl->queue, cpu);
 
 	iso_rl_dequeue((unsigned long)q);
 
