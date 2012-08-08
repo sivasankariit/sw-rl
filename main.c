@@ -4,7 +4,13 @@
 #include "stats.h"
 
 MODULE_AUTHOR("Vimal <j.vimal@gmail.com>");
-MODULE_DESCRIPTION("Parallel Rate Limiter");
+#ifdef DIRECT
+MODULE_DESCRIPTION("Parallel Rate Limiter (direct edition)");
+#endif
+
+#ifdef NETFILTER
+MODULE_DESCRIPTION("Parallel Rate Limiter (netfilter edition)");
+#endif
 MODULE_VERSION("1");
 MODULE_LICENSE("GPL");
 
