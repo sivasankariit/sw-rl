@@ -10,7 +10,7 @@ int ISO_MAX_BURST_TIME_US=100;
 int ISO_BURST_FACTOR=8;
 int ISO_RL_UPDATE_INTERVAL_US=20;
 int ISO_RATE_INITIAL=1000;
-int ISO_MAX_QUEUE_LEN_BYTES=128 * 1024;
+int ISO_MAX_QUEUE_LEN_BYTES=256 * 1024;
 int ISO_MIN_BURST_BYTES=65536;
 
 /* Called the first time when the module is initialised */
@@ -153,7 +153,7 @@ void iso_rl_show(struct iso_rl *rl, struct seq_file *s) {
 	for_each_online_cpu(i) {
 		if(first) {
 			seq_printf(s, "\tcpu   len"
-					   "   first_len   queued   fbacklog   tokens  active?\n");
+					   "   first_len   queued   tokens  active?\n");
 			first = 0;
 		}
 		q = per_cpu_ptr(rl->queue, i);
