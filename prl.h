@@ -32,11 +32,21 @@ struct iso_rl_queue {
 
 struct iso_rl {
 	u32 rate;
+	u32 weight;
+
 	spinlock_t spinlock;
 	u64 total_tokens;
 	ktime_t last_update_time;
 	char name[RLNAME_MAX_CHARS];
+	/* 0 if the rl is really a "class" without a queue. */
+	int leaf;
 
+	struct iso_rl *parent;
+	struct list_head siblings;
+	struct list_head children;
+
+	/* The list of all rls */
+	struct list_head list;
 	struct iso_rl_queue __percpu *queue;
 };
 
@@ -55,6 +65,7 @@ struct iso_rl_cb {
 
 extern struct iso_rl_cb __percpu *rlcb;
 extern struct iso_rl *rootrl;
+extern struct list_head rls;
 
 // Parameters
 extern int ISO_TOKENBUCKET_TIMEOUT_NS;
@@ -69,6 +80,11 @@ extern void skb_xmit(struct sk_buff *);
 void iso_rl_exit(void);
 int iso_rl_prep(void);
 int iso_rl_init(struct iso_rl *);
+
+struct iso_rl *iso_rl_new(char *name);
+int iso_rl_attach(struct iso_rl *parent, struct iso_rl *child);
+void iso_rl_dequeue_root(void);
+
 void iso_rl_free(struct iso_rl *);
 void iso_rl_show(struct iso_rl *, struct seq_file *);
 static inline int iso_rl_should_refill(struct iso_rl *);

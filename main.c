@@ -15,7 +15,7 @@ MODULE_VERSION("1");
 MODULE_LICENSE("GPL");
 
 static char *dev;
-MODULE_PARM_DESC(dev, "Interface to operate prl.");
+MODULE_PARM_DESC(dev, "Interface to operate prl (default eth0).");
 module_param(dev, charp, 0);
 
 static int rate=1000;
@@ -25,12 +25,28 @@ module_param(rate, int, 0);
 struct net_device *iso_netdev;
 static int iso_init(void);
 static void iso_exit(void);
-extern struct iso_rl *rootrl;
+struct iso_rl *p5001, *rest;
 
 int iso_exiting;
 
 int iso_tx_hook_init(void);
 void iso_tx_hook_exit(void);
+
+static void test(void) {
+	p5001 = iso_rl_new("p5001");
+	if(p5001 == NULL)
+		return;
+
+	rest = iso_rl_new("rest");
+	if(rest == NULL) {
+		iso_rl_free(p5001);
+		return;
+	}
+
+	iso_rl_attach(rootrl, p5001);
+	iso_rl_attach(rootrl, rest);
+}
+
 
 static int iso_init() {
 	int i, ret = -1;
@@ -68,14 +84,12 @@ static int iso_init() {
 	if(iso_rl_prep())
 		goto out;
 
-	if(iso_rl_init(rootrl))
+	if(iso_tx_hook_init()) {
+		iso_rl_free(rootrl);
 		goto out;
+	}
 
-	strncpy(rootrl->name, "root\0", 5);
-
-	if(iso_tx_hook_init())
-		goto out;
-
+	test();
 	ret = 0;
 
  out:

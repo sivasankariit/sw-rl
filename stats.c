@@ -32,7 +32,11 @@ static void iso_stats_proc_seq_stop(struct seq_file *s, void *v)
 
 static int iso_stats_proc_seq_show(struct seq_file *s, void *v)
 {
-	iso_rl_show(rootrl, s);
+	struct iso_rl *rl;
+
+	list_for_each_entry(rl, &rls, list) {
+		iso_rl_show(rl, s);
+	}
 	return 0;
 }
 

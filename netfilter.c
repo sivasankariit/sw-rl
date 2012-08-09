@@ -5,6 +5,8 @@
 #include <linux/netfilter_ipv4.h>
 #include <net/neighbour.h>
 #include <net/dst.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
 
 #include "prl.h"
 
@@ -20,7 +22,7 @@ struct ok_func_ptr {
 #define OKPTR(skb) ((struct ok_func_ptr *)((skb)->cb))
 
 extern struct net_device *iso_netdev;
-extern struct iso_rl rl;
+extern struct iso_rl *p5001, *rest;
 
 static struct nf_hook_ops hook_out;
 unsigned int hook_out_func(unsigned int hooknum,
@@ -76,19 +78,38 @@ unsigned int hook_out_func(unsigned int hooknum,
 													 int (*okfn)(struct sk_buff *))
 {
 	enum iso_verdict verdict;
-	struct iso_rl_queue *q;
+	struct iso_rl *rl;
+	struct iphdr *iph;
+	struct tcphdr *tcph;
+
+	int port = 0;
+	//	struct iso_rl_queue *q;
 	int cpu = smp_processor_id();
 
 	/* Filter packets on rate limited interface */
 	if(out != iso_netdev)
 		return NF_ACCEPT;
 
+	/* TODO: better classification */
+	iph = ip_hdr(skb);
+	rl = rest;
+
+	if(iph->protocol == IPPROTO_TCP) {
+		tcph = tcp_hdr(skb);
+		port = ntohs(tcph->dest);
+		if(port == 5001)
+			rl = p5001;
+	}
+
 	rcu_read_lock_bh();
 	OKPTR(skb)->function = okfn;
-	verdict = iso_rl_enqueue(rootrl, skb, cpu);
-	q = per_cpu_ptr(rootrl->queue, cpu);
+	verdict = iso_rl_enqueue(rl, skb, cpu);
 
+	iso_rl_dequeue_root();
+	/*
+	q = per_cpu_ptr(rootrl->queue, cpu);
 	iso_rl_dequeue((unsigned long)q);
+	*/
 	rcu_read_unlock_bh();
 
 	switch(verdict) {

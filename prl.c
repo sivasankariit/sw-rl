@@ -3,6 +3,7 @@
 
 struct iso_rl_cb __percpu *rlcb;
 struct iso_rl *rootrl;
+struct list_head rls;
 extern int iso_exiting;
 
 int ISO_TOKENBUCKET_TIMEOUT_NS=25*1000;
@@ -16,6 +17,7 @@ int ISO_MIN_BURST_BYTES=65536;
 /* Called the first time when the module is initialised */
 int iso_rl_prep() {
 	int cpu;
+  INIT_LIST_HEAD(&rls);
 
 	rlcb = alloc_percpu(struct iso_rl_cb);
 	if(rlcb == NULL)
@@ -40,7 +42,7 @@ int iso_rl_prep() {
 		cb->cpu = cpu;
 	}
 
-  rootrl = kmalloc(sizeof(*rootrl), GFP_KERNEL);
+  rootrl = iso_rl_new("root");
   if(rootrl == NULL) {
     free_percpu(rlcb);
     return -1;
@@ -132,23 +134,83 @@ int iso_rl_init(struct iso_rl *rl) {
 		INIT_LIST_HEAD(&q->active_list);
 	}
 
+  INIT_LIST_HEAD(&rl->list);
+  INIT_LIST_HEAD(&rl->siblings);
+  INIT_LIST_HEAD(&rl->children);
+  rl->leaf = 1;
+  rl->parent = NULL;
   return 0;
 }
 
+struct iso_rl *iso_rl_new(char *name) {
+  struct iso_rl *rl = kmalloc(sizeof(*rl), GFP_KERNEL);
+  if(rl == NULL) {
+    printk(KERN_INFO "Could not allocate rl %s\n", name);
+    return NULL;
+  }
+
+  if(iso_rl_init(rl)) {
+    printk(KERN_INFO "rl %s init failed\n", name);
+    kfree(rl);
+    return NULL;
+  }
+
+  strcpy(rl->name, name);
+  list_add_tail(&rl->list, &rls);
+  return rl;
+}
+
+// Conveniently ignore locking for now
+int iso_rl_attach(struct iso_rl *rl, struct iso_rl *child) {
+  if(child->parent == rl)
+    return 0;
+
+  // TODO: ensure rl's and child's queues are flushed
+  if(rl->leaf) {
+    rl->leaf = 0;
+    free_percpu(rl->queue);
+  }
+
+  list_move_tail(&child->siblings, &rl->children);
+  child->parent = rl;
+  return 0;
+}
 
 void iso_rl_free(struct iso_rl *rl) {
-	free_percpu(rl->queue);
+  list_del_init(&rl->list);
+  if(rl->leaf)
+    free_percpu(rl->queue);
 	kfree(rl);
 }
 
+void _iso_rl_dequeue(struct iso_rl *rl, int cpu) {
+  struct iso_rl *child;
+
+  if(rl->leaf) {
+    struct iso_rl_queue *q = per_cpu_ptr(rl->queue, cpu);
+    iso_rl_dequeue((unsigned long)q);
+    return;
+  }
+
+  list_for_each_entry(child, &rl->children, siblings) {
+    _iso_rl_dequeue(child, cpu);
+  }
+}
+
+/* Dequeue from active rate limiters on this cpu */
+void iso_rl_dequeue_root() {
+  _iso_rl_dequeue(rootrl, smp_processor_id());
+}
 
 /* Called with rcu lock */
 void iso_rl_show(struct iso_rl *rl, struct seq_file *s) {
 	struct iso_rl_queue *q;
 	int i, first = 1;
 
-	seq_printf(s, "name %s   rate %u   total_tokens %llu   last %llx   %p\n",
-             rl->name, rl->rate, rl->total_tokens, *(u64 *)&rl->last_update_time, rl);
+	seq_printf(s, "name %s  parent %s  rate %u  total_tokens %llu   last %llx   %p (%p)\n",
+             rl->name, rl->parent ? rl->parent->name : "(root)",
+             rl->rate, rl->total_tokens, *(u64 *)&rl->last_update_time,
+             rl, rl->parent);
 
 	for_each_online_cpu(i) {
 		if(first) {
@@ -187,12 +249,17 @@ inline void iso_rl_clock(struct iso_rl *rl) {
 }
 
 enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu) {
-	struct iso_rl_queue *q = per_cpu_ptr(rl->queue, cpu);
+	struct iso_rl_queue *q;
 	enum iso_verdict verdict;
 	s32 len, diff;
 
-#define MIN_PKT_SIZE (600)
+  if(!rl->leaf) {
+    printk(KERN_INFO "bug: enqueueing into non-leaf rate limiter (%s)\n", rl->name);
+    return ISO_VERDICT_PASS;
+  }
 
+#define MIN_PKT_SIZE (600)
+  q = per_cpu_ptr(rl->queue, cpu);
 	iso_rl_clock(rl);
 	len = (s32) skb_size(pkt);
 
