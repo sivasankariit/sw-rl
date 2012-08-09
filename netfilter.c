@@ -83,11 +83,13 @@ unsigned int hook_out_func(unsigned int hooknum,
 	if(out != iso_netdev)
 		return NF_ACCEPT;
 
+	rcu_read_lock_bh();
 	OKPTR(skb)->function = okfn;
 	verdict = iso_rl_enqueue(prl, skb, cpu);
 	q = per_cpu_ptr(prl->queue, cpu);
 
 	iso_rl_dequeue((unsigned long)q);
+	rcu_read_unlock_bh();
 
 	switch(verdict) {
 	case ISO_VERDICT_DROP:
