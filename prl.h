@@ -9,6 +9,8 @@
 #include <linux/if_ether.h>
 #include <linux/seq_file.h>
 
+#define RLNAME_MAX_CHARS (64)
+
 enum iso_verdict {
 	ISO_VERDICT_SUCCESS,
 	ISO_VERDICT_DROP,
@@ -33,6 +35,7 @@ struct iso_rl {
 	spinlock_t spinlock;
 	u64 total_tokens;
 	ktime_t last_update_time;
+	char name[RLNAME_MAX_CHARS];
 
 	struct iso_rl_queue __percpu *queue;
 };

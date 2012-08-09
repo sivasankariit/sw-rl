@@ -71,6 +71,8 @@ static int iso_init() {
 	if(iso_rl_init(rootrl))
 		goto out;
 
+	strncpy(rootrl->name, "root\0", 5);
+
 	if(iso_tx_hook_init())
 		goto out;
 
