@@ -85,8 +85,8 @@ unsigned int hook_out_func(unsigned int hooknum,
 
 	rcu_read_lock_bh();
 	OKPTR(skb)->function = okfn;
-	verdict = iso_rl_enqueue(prl, skb, cpu);
-	q = per_cpu_ptr(prl->queue, cpu);
+	verdict = iso_rl_enqueue(rootrl, skb, cpu);
+	q = per_cpu_ptr(rootrl->queue, cpu);
 
 	iso_rl_dequeue((unsigned long)q);
 	rcu_read_unlock_bh();

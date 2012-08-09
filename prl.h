@@ -51,7 +51,7 @@ struct iso_rl_cb {
 };
 
 extern struct iso_rl_cb __percpu *rlcb;
-extern struct iso_rl *prl;
+extern struct iso_rl *rootrl;
 
 // Parameters
 extern int ISO_TOKENBUCKET_TIMEOUT_NS;

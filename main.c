@@ -25,7 +25,7 @@ module_param(rate, int, 0);
 struct net_device *iso_netdev;
 static int iso_init(void);
 static void iso_exit(void);
-extern struct iso_rl *prl;
+extern struct iso_rl *rootrl;
 
 int iso_exiting;
 
@@ -68,7 +68,7 @@ static int iso_init() {
 	if(iso_rl_prep())
 		goto out;
 
-	if(iso_rl_init(prl))
+	if(iso_rl_init(rootrl))
 		goto out;
 
 	if(iso_tx_hook_init())
@@ -87,7 +87,7 @@ static void iso_exit() {
 	iso_tx_hook_exit();
 	iso_stats_exit();
 	iso_rl_exit();
-	iso_rl_free(prl);
+	iso_rl_free(rootrl);
 
 	dev_put(iso_netdev);
 
