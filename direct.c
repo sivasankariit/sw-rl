@@ -87,6 +87,7 @@ netdev_tx_t iso_ndo_start_xmit(struct sk_buff *skb, struct net_device *out) {
 	struct iso_rl_queue *q;
 
 	int cpu = smp_processor_id();
+	netdev_tx_t ret = NETDEV_TX_OK;
 
 	txq = netdev_get_tx_queue(iso_netdev, skb_get_queue_mapping(skb));
 	HARD_TX_UNLOCK(iso_netdev, txq);
@@ -99,7 +100,9 @@ netdev_tx_t iso_ndo_start_xmit(struct sk_buff *skb, struct net_device *out) {
 
 	switch(verdict) {
 	case ISO_VERDICT_DROP:
-		kfree_skb(skb);
+		// this will result in a requeue, keeping the packet in
+		// the qdisc and stopping further dequeues from qdisc
+		ret = NETDEV_TX_BUSY;
 		break;
 
 	case ISO_VERDICT_PASS:
@@ -112,7 +115,7 @@ netdev_tx_t iso_ndo_start_xmit(struct sk_buff *skb, struct net_device *out) {
 	}
 
 	HARD_TX_LOCK(iso_netdev, txq, cpu);
-	return NETDEV_TX_OK;
+	return ret;
 }
 
 /* Local Variables: */
