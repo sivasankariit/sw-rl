@@ -188,6 +188,8 @@ void iso_rl_free(struct iso_rl *rl) {
 	kfree(rl);
 }
 
+/* UNUSED: Walk the entire tree and dequeue.
+ * TODO: Would be nice to walk only the active subtree. */
 void _iso_rl_dequeue(struct iso_rl *rl, int cpu) {
   struct iso_rl *child;
 
@@ -205,7 +207,8 @@ void _iso_rl_dequeue(struct iso_rl *rl, int cpu) {
 
 /* Dequeue from active rate limiters on this cpu */
 void iso_rl_dequeue_root() {
-  _iso_rl_dequeue(rootrl, smp_processor_id());
+	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, smp_processor_id());
+	iso_rl_xmit_tasklet((unsigned long) cb);
 }
 
 /* Called with rcu lock */
@@ -286,10 +289,21 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	__skb_queue_tail(&q->list, pkt);
 	q->bytes_enqueued += skb_size(pkt);
 
-	// TODO: 'activate queue'
 	verdict = ISO_VERDICT_SUCCESS;
+	iso_rl_activate_queue(q);
  done:
 	return verdict;
+}
+
+inline void iso_rl_activate_queue(struct iso_rl_queue *q) {
+	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
+	if(list_empty(&q->active_list))
+		list_add_tail(&q->active_list, &cb->active_list);
+}
+
+inline void iso_rl_deactivate_queue(struct iso_rl_queue *q) {
+	if(!list_empty(&q->active_list))
+		list_del_init(&q->active_list);
 }
 
 /* This function MUST be executed with interrupts enabled */
@@ -305,6 +319,7 @@ void iso_rl_dequeue(unsigned long _q) {
 	/* Try to borrow from the global token pool; if that fails,
 	   program the timeout for this queue */
 
+	iso_rl_deactivate_queue(q);
 	if(unlikely(q->tokens < q->first_pkt_size)) {
 		timeout = iso_rl_borrow_tokens(rl, q);
 		if(timeout)
@@ -345,15 +360,14 @@ void iso_rl_dequeue(unsigned long _q) {
 
 	if(!timeout) {
 		unsigned long flags;
-		if(!list_empty(&q->active_list)) {
-			list_del_init(&q->active_list);
-			if(rl->parent) {
-				spin_lock_irqsave(&rl->parent->spinlock, flags);
-				rl->waiting -= 1;
-				if(rl->waiting == 0)
-					rl->parent->active_weight -= rl->weight;
-				spin_unlock_irqrestore(&rl->parent->spinlock, flags);
-			}
+
+		if(q->waiting && rl->parent) {
+			q->waiting = 0;
+			spin_lock_irqsave(&rl->parent->spinlock, flags);
+			rl->waiting -= 1;
+			if(rl->waiting == 0)
+				rl->parent->active_weight -= rl->weight;
+			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
 		}
 	}
 
@@ -362,16 +376,14 @@ void iso_rl_dequeue(unsigned long _q) {
 		struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
 		unsigned long flags;
 
-		/* don't recursively add! */
-		if(list_empty(&q->active_list)) {
-			list_add_tail(&q->active_list, &cb->active_list);
-			if(rl->parent) {
-				spin_lock_irqsave(&rl->parent->spinlock, flags);
-				rl->waiting += 1;
-				if(rl->waiting == 1)
-					rl->parent->active_weight += rl->weight;
-				spin_unlock_irqrestore(&rl->parent->spinlock, flags);
-			}
+		iso_rl_activate_queue(q);
+		if(!q->waiting && rl->parent) {
+			q->waiting = 1;
+			spin_lock_irqsave(&rl->parent->spinlock, flags);
+			rl->waiting += 1;
+			if(rl->waiting == 1)
+				rl->parent->active_weight += rl->weight;
+			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
 		}
 
 		if(!hrtimer_active(&cb->timer))

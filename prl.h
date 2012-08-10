@@ -98,6 +98,8 @@ inline int iso_rl_borrow_tokens(struct iso_rl *, struct iso_rl_queue *);
 static inline ktime_t iso_rl_gettimeout(void);
 static inline u64 iso_rl_singleq_burst(struct iso_rl *);
 void iso_rl_xmit_tasklet(unsigned long _cb);
+inline void iso_rl_activate_queue(struct iso_rl_queue *q);
+inline void iso_rl_deactivate_queue(struct iso_rl_queue *q);
 
 static inline int skb_size(struct sk_buff *skb) {
 	return ETH_HLEN + skb->len;
