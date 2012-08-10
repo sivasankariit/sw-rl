@@ -297,6 +297,8 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 
 inline void iso_rl_activate_queue(struct iso_rl_queue *q) {
 	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
+	// TODO: add front or back of list depending on q->rl->rate
+	// Have 4 priorities: 4 (highest), 3 (5--8G), 2 (1--4G), 1 (< 1G)
 	if(list_empty(&q->active_list))
 		list_add_tail(&q->active_list, &cb->active_list);
 }
