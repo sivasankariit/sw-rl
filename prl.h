@@ -24,6 +24,7 @@ struct iso_rl_queue {
 	u64 bytes_xmit;
 	u64 tokens;
 	int cpu;
+	int waiting;
 
 	struct iso_rl *rl;
 	struct hrtimer *cputimer;
@@ -32,7 +33,8 @@ struct iso_rl_queue {
 
 struct iso_rl {
 	u32 rate;
-	u32 weight;
+	u32 weight, waiting;
+	u32 active_weight;
 
 	spinlock_t spinlock;
 	u64 total_tokens;

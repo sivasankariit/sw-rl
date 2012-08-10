@@ -43,6 +43,7 @@ static void test(void) {
 		return;
 	}
 
+	p5001->weight = 2;
 	iso_rl_attach(rootrl, p5001);
 	iso_rl_attach(rootrl, rest);
 }

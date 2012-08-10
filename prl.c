@@ -76,7 +76,7 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 
 #ifdef DEBUG
   {
-	/* This block is not needed, but just for debugging purposes */
+		/* This block is not needed, but just for debugging purposes */
     ktime_t last;
     last = cb->last;
     cb->last = ktime_get();
@@ -93,8 +93,8 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 			break;
 		}
 
-		list_del_init(&q->active_list);
-		iso_rl_clock(q->rl);
+		// list_del_init(&q->active_list);
+		// iso_rl_clock(q->rl);
 		iso_rl_dequeue((unsigned long)q);
 	}
 
@@ -114,6 +114,10 @@ int iso_rl_init(struct iso_rl *rl) {
   if(rl->queue == NULL)
     return -1;
 
+	rl->weight = 1;
+	rl->active_weight = 0;
+	rl->waiting = 0;
+
 	spin_lock_init(&rl->spinlock);
 
 	for_each_possible_cpu(i) {
@@ -130,6 +134,7 @@ int iso_rl_init(struct iso_rl *rl) {
 		q->cpu = i;
 		q->rl = rl;
 		q->cputimer = &cb->timer;
+		q->waiting = 0;
 
 		INIT_LIST_HEAD(&q->active_list);
 	}
@@ -188,6 +193,7 @@ void _iso_rl_dequeue(struct iso_rl *rl, int cpu) {
 
   if(rl->leaf) {
     struct iso_rl_queue *q = per_cpu_ptr(rl->queue, cpu);
+    iso_rl_clock(rl);
     iso_rl_dequeue((unsigned long)q);
     return;
   }
@@ -212,19 +218,22 @@ void iso_rl_show(struct iso_rl *rl, struct seq_file *s) {
              rl->rate, rl->total_tokens, *(u64 *)&rl->last_update_time,
              rl, rl->parent);
 
+	seq_printf(s, "   wt %d, aw %d, waiting %d\n",
+						 rl->weight, rl->active_weight, rl->waiting);
+
 	for_each_online_cpu(i) {
 		if(first) {
 			seq_printf(s, "\tcpu   len"
-					   "   first_len   queued   tokens  active?\n");
+								 "   first_len   queued   tokens  active?\n");
 			first = 0;
 		}
 		q = per_cpu_ptr(rl->queue, i);
 
 		if(q->tokens > 0 || skb_queue_len(&q->list) > 0) {
 			seq_printf(s, "\t%3d   %3d   %3d   %10llu   %10llu   %d,%d\n",
-					   i, skb_queue_len(&q->list), q->first_pkt_size,
-					   q->bytes_enqueued, q->tokens,
-					   !list_empty(&q->active_list), hrtimer_active(q->cputimer));
+								 i, skb_queue_len(&q->list), q->first_pkt_size,
+								 q->bytes_enqueued, q->tokens,
+								 !list_empty(&q->active_list), hrtimer_active(q->cputimer));
 		}
 	}
 }
@@ -277,6 +286,7 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	__skb_queue_tail(&q->list, pkt);
 	q->bytes_enqueued += skb_size(pkt);
 
+	// TODO: 'activate queue'
 	verdict = ISO_VERDICT_SUCCESS;
  done:
 	return verdict;
@@ -317,6 +327,7 @@ void iso_rl_dequeue(unsigned long _q) {
 		q->tokens -= size;
 		q->bytes_enqueued -= size;
 
+    // TODO: if skb_xmit fails, break
     skb_xmit(pkt);
     q->bytes_xmit += size;
 
@@ -330,15 +341,37 @@ void iso_rl_dequeue(unsigned long _q) {
 		q->first_pkt_size = size;
 	}
 
-unlock:
+ unlock:
 
-timeout:
+	if(!timeout) {
+		unsigned long flags;
+		if(!list_empty(&q->active_list)) {
+			list_del_init(&q->active_list);
+			if(rl->parent) {
+				spin_lock_irqsave(&rl->parent->spinlock, flags);
+				rl->waiting -= 1;
+				if(rl->waiting == 0)
+					rl->parent->active_weight -= rl->weight;
+				spin_unlock_irqrestore(&rl->parent->spinlock, flags);
+			}
+		}
+	}
+
+ timeout:
 	if(timeout && !iso_exiting) {
 		struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
+		unsigned long flags;
 
 		/* don't recursively add! */
 		if(list_empty(&q->active_list)) {
 			list_add_tail(&q->active_list, &cb->active_list);
+			if(rl->parent) {
+				spin_lock_irqsave(&rl->parent->spinlock, flags);
+				rl->waiting += 1;
+				if(rl->waiting == 1)
+					rl->parent->active_weight += rl->weight;
+				spin_unlock_irqrestore(&rl->parent->spinlock, flags);
+			}
 		}
 
 		if(!hrtimer_active(&cb->timer))
@@ -354,6 +387,13 @@ enum hrtimer_restart iso_rl_timeout(struct hrtimer *timer) {
 	return HRTIMER_NORESTART;
 }
 
+inline u64 iso_rl_determine_rate(struct iso_rl *rl) {
+	if(rl->parent == NULL || rl->parent->active_weight == 0 || !rl->waiting)
+		return rl->rate;
+	return iso_rl_determine_rate(rl->parent) * rl->weight / (rl->parent->active_weight);
+}
+
+
 inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 	unsigned long flags;
 	u64 borrow;
@@ -363,6 +403,9 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 		return timeout;
 
 	borrow = max(iso_rl_singleq_burst(rl), (u64)q->first_pkt_size);
+
+	rl->rate = iso_rl_determine_rate(rl);
+	iso_rl_clock(rl);
 
 	if(rl->total_tokens >= borrow) {
 		rl->total_tokens -= borrow;
@@ -376,3 +419,7 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 	spin_unlock_irqrestore(&rl->spinlock, flags);
 	return timeout;
 }
+
+/* Local Variables: */
+/* indent-tabs-mode:t */
+/* End: */
