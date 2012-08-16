@@ -74,6 +74,10 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 	if(iso_exiting)
 		return;
 
+	// determine all rates in one pass.  maybe use just a single lock
+	// for this calculation?
+	// iso_rl_determine_rates();
+
 #ifdef DEBUG
   {
 		/* This block is not needed, but just for debugging purposes */
@@ -94,7 +98,8 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 		}
 
 		// list_del_init(&q->active_list);
-		// iso_rl_clock(q->rl);
+		// iso_rl_determine_rate(q->rl);
+		iso_rl_clock(q->rl);
 		iso_rl_dequeue((unsigned long)q);
 	}
 
@@ -265,14 +270,14 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	enum iso_verdict verdict;
 	s32 len, diff;
 
-  if(!rl->leaf) {
-    printk(KERN_INFO "bug: enqueueing into non-leaf rate limiter (%s)\n", rl->name);
-    return ISO_VERDICT_PASS;
-  }
+	if(!rl->leaf) {
+		printk(KERN_INFO "bug: enqueueing into non-leaf rate limiter (%s)\n", rl->name);
+		return ISO_VERDICT_PASS;
+	}
 
 #define MIN_PKT_SIZE (600)
-  q = per_cpu_ptr(rl->queue, cpu);
-	iso_rl_clock(rl);
+	q = per_cpu_ptr(rl->queue, cpu);
+	// iso_rl_clock(rl);
 	len = (s32) skb_size(pkt);
 
 	if(q->bytes_enqueued + len > ISO_MAX_QUEUE_LEN_BYTES) {
@@ -344,9 +349,9 @@ void iso_rl_dequeue(unsigned long _q) {
 		q->tokens -= size;
 		q->bytes_enqueued -= size;
 
-    // TODO: if skb_xmit fails, break
-    skb_xmit(pkt);
-    q->bytes_xmit += size;
+		// TODO: if skb_xmit fails, break
+		skb_xmit(pkt);
+		q->bytes_xmit += size;
 
 		if(skb_queue_len(skq) == 0) {
 			timeout = 0;
@@ -418,8 +423,8 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 
 	borrow = max(iso_rl_singleq_burst(rl), (u64)q->first_pkt_size);
 
-	rl->rate = iso_rl_determine_rate(rl);
-	iso_rl_clock(rl);
+	//rl->rate = iso_rl_determine_rate(rl);
+	//iso_rl_clock(rl);
 
 	if(rl->total_tokens >= borrow) {
 		rl->total_tokens -= borrow;
