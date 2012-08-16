@@ -26,6 +26,7 @@ struct net_device *iso_netdev;
 static int iso_init(void);
 static void iso_exit(void);
 struct iso_rl *p5001, *rest;
+struct iso_rl *testrls[128];
 
 int iso_exiting;
 
@@ -33,19 +34,14 @@ int iso_tx_hook_init(void);
 void iso_tx_hook_exit(void);
 
 static void test(void) {
-	p5001 = iso_rl_new("p5001");
-	if(p5001 == NULL)
-		return;
-
-	rest = iso_rl_new("rest");
-	if(rest == NULL) {
-		iso_rl_free(p5001);
-		return;
-	}
-
-	p5001->weight = 2;
-	iso_rl_attach(rootrl, p5001);
-	iso_rl_attach(rootrl, rest);
+  char name[32];
+  int i;
+  for(i = 0; i < 128; i++) {
+    sprintf(name, "rl%d", i);
+    testrls[i] = iso_rl_new(name);
+    testrls[i]->weight = 1;
+    iso_rl_attach(rootrl, testrls[i]);
+  }
 }
 
 

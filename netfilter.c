@@ -23,6 +23,7 @@ struct ok_func_ptr {
 
 extern struct net_device *iso_netdev;
 extern struct iso_rl *p5001, *rest;
+extern struct iso_rl *testrls[128];
 
 static struct nf_hook_ops hook_out;
 unsigned int hook_out_func(unsigned int hooknum,
@@ -92,13 +93,12 @@ unsigned int hook_out_func(unsigned int hooknum,
 
 	/* TODO: better classification */
 	iph = ip_hdr(skb);
-	rl = rest;
+	rl = testrls[0];
 
 	if(iph->protocol == IPPROTO_TCP) {
 		tcph = tcp_hdr(skb);
-		port = ntohs(tcph->dest);
-		if(port == 5001)
-			rl = p5001;
+		port = ntohs(tcph->dest) % 127 + 1;
+    rl = testrls[port + 1];
 	}
 
 	rcu_read_lock_bh();

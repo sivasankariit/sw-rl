@@ -6,6 +6,8 @@ struct iso_rl *rootrl;
 struct list_head rls;
 extern int iso_exiting;
 
+inline u64 iso_rl_determine_rate(struct iso_rl *rl);
+
 int ISO_TOKENBUCKET_TIMEOUT_NS=25*1000;
 int ISO_MAX_BURST_TIME_US=100;
 int ISO_BURST_FACTOR=8;
@@ -98,7 +100,7 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 		}
 
 		// list_del_init(&q->active_list);
-		// iso_rl_determine_rate(q->rl);
+		q->rl->rate = iso_rl_determine_rate(q->rl);
 		iso_rl_clock(q->rl);
 		iso_rl_dequeue((unsigned long)q);
 	}
