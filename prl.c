@@ -411,6 +411,8 @@ enum hrtimer_restart iso_rl_timeout(struct hrtimer *timer) {
 inline u64 iso_rl_determine_rate(struct iso_rl *rl) {
 	if(rl->parent == NULL || rl->parent->active_weight == 0 || !rl->waiting)
 		return rl->rate;
+  if(rl->waiting && rl->parent && rl->parent->active_weight == 1)
+    return rl->rate;
 	return iso_rl_determine_rate(rl->parent) * rl->weight / (rl->parent->active_weight);
 }
 

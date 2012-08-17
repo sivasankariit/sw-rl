@@ -97,7 +97,7 @@ unsigned int hook_out_func(unsigned int hooknum,
 
 	if(iph->protocol == IPPROTO_TCP) {
 		tcph = tcp_hdr(skb);
-		port = ntohs(tcph->dest) % 127 + 1;
+		port = ntohs(tcph->source) % 127 + 1;
     rl = testrls[port + 1];
 	}
 

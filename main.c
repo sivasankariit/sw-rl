@@ -41,6 +41,7 @@ static void test(void) {
     testrls[i] = iso_rl_new(name);
     testrls[i]->weight = 1;
     iso_rl_attach(rootrl, testrls[i]);
+    testrls[i]->rate = rate/128;
   }
 }
 
