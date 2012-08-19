@@ -91,7 +91,6 @@ inline void iso_rl_dequeue_root(void);
 
 void iso_rl_free(struct iso_rl *);
 void iso_rl_show(struct iso_rl *, struct seq_file *);
-static inline int iso_rl_should_refill(struct iso_rl *);
 inline void iso_rl_clock(struct iso_rl *);
 enum iso_verdict iso_rl_enqueue(struct iso_rl *, struct sk_buff *, int cpu);
 void iso_rl_dequeue(unsigned long _q);
@@ -118,13 +117,6 @@ static inline ktime_t iso_rl_gettimeout() {
 
 static inline u64 iso_rl_singleq_burst(struct iso_rl *rl) {
 	return ((rl->rate * ISO_MAX_BURST_TIME_US) >> 3) / ISO_BURST_FACTOR;
-}
-
-static inline int iso_rl_should_refill(struct iso_rl *rl) {
-	ktime_t now = ktime_get();
-	if(ktime_us_delta(now, rl->last_update_time) > ISO_RL_UPDATE_INTERVAL_US)
-		return 1;
-	return 0;
 }
 
 #endif /* __RL_H__ */

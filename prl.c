@@ -228,9 +228,6 @@ inline void iso_rl_clock(struct iso_rl *rl) {
 	u64 cap, us;
 	ktime_t now;
 
-	if(!iso_rl_should_refill(rl))
-		return;
-
 	now = ktime_get();
 	us = ktime_us_delta(now, rl->last_update_time);
 	rl->total_tokens += (rl->rate * us) >> 3;
