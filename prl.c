@@ -437,7 +437,7 @@ inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 			rl->waiting += 1;
 			if(rl->waiting == 1) {
 				parent->active_weight += rl->weight;
-				list_add_tail(&rl->waiting, &parent->waiting_children);
+				list_add_tail(&rl->waiting_node, &parent->waiting_list);
 			} else {
 				// parent has something waiting already, so it would
 				// already be present in its parent's waiting list
@@ -463,7 +463,7 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 			rl->waiting -= 1;
 			if(rl->waiting == 0) {
 				parent->active_weight -= rl->weight;
-				list_del_init(&rl->waiting_node, &parent->waiting_list);
+				list_del_init(&rl->waiting_node);
 			} else {
 				// parent still has someone else waiting, so let's not remove parent from the tree
 				done = 1;
@@ -487,14 +487,12 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	else
 		rl->total_tokens += tokens;
 
-	// shouldn't happen actually...
 	if(!rl->active_weight) {
-		printk(KERN_INFO "BUG: shouldn't fill tokens on an inactive rate limiter!\n");
+		// we've reached a leaf, so just unlock and get away!
 		goto unlock;
 	}
 
 	child_share = rl->total_tokens / rl->active_weight;
-
 	if(child_share == 0)
 		goto unlock;
 

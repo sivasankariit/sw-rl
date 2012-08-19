@@ -105,6 +105,7 @@ inline void iso_rl_deactivate_queue(struct iso_rl_queue *q);
 
 inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q);
 inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q);
+inline void iso_rl_fill_tokens(void);
 
 static inline int skb_size(struct sk_buff *skb) {
 	return ETH_HLEN + skb->len;
