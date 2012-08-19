@@ -27,10 +27,10 @@ extern struct iso_rl *testrls[128];
 
 static struct nf_hook_ops hook_out;
 unsigned int hook_out_func(unsigned int hooknum,
-													 struct sk_buff *skb,
-													 const struct net_device *in,
-													 const struct net_device *out,
-													 int (*okfn)(struct sk_buff *));
+						   struct sk_buff *skb,
+						   const struct net_device *in,
+						   const struct net_device *out,
+						   int (*okfn)(struct sk_buff *));
 
 int iso_tx_hook_init(void);
 void iso_tx_hook_exit(void);
@@ -48,7 +48,7 @@ inline void skb_xmit(struct sk_buff *skb) {
 	ok_fn_t okfn = OKPTR(skb)->function;
 	if(okfn) {
 		okfn(skb);
-	}	else {
+	} else {
 		if(net_ratelimit())
 			printk(KERN_INFO "prl: couldn't handle buff %p\n", skb);
 		kfree_skb(skb);
@@ -73,10 +73,10 @@ void iso_tx_hook_exit() {
 }
 
 unsigned int hook_out_func(unsigned int hooknum,
-													 struct sk_buff *skb,
-													 const struct net_device *in,
-													 const struct net_device *out,
-													 int (*okfn)(struct sk_buff *))
+						   struct sk_buff *skb,
+						   const struct net_device *in,
+						   const struct net_device *out,
+						   int (*okfn)(struct sk_buff *))
 {
 	enum iso_verdict verdict;
 	struct iso_rl *rl;
@@ -84,7 +84,6 @@ unsigned int hook_out_func(unsigned int hooknum,
 	struct tcphdr *tcph;
 
 	int port = 0;
-	//	struct iso_rl_queue *q;
 	int cpu = smp_processor_id();
 
 	/* Filter packets on rate limited interface */
@@ -106,10 +105,6 @@ unsigned int hook_out_func(unsigned int hooknum,
 	verdict = iso_rl_enqueue(rl, skb, cpu);
 
 	iso_rl_dequeue_root();
-	/*
-	q = per_cpu_ptr(rootrl->queue, cpu);
-	iso_rl_dequeue((unsigned long)q);
-	*/
 	rcu_read_unlock_bh();
 
 	switch(verdict) {

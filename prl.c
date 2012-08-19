@@ -74,8 +74,7 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 	if(iso_exiting)
 		return;
 
-	// determine all rates in one pass.  maybe use just a single lock
-	// for this calculation?
+	/* Do a single pass over all backlogged RLs and trickle down tokens */
 	iso_rl_fill_tokens();
 
 #ifdef DEBUG
@@ -170,12 +169,20 @@ struct iso_rl *iso_rl_new(char *name) {
 	return rl;
 }
 
-// Conveniently ignore locking for now
+void iso_rl_free(struct iso_rl *rl) {
+	list_del_init(&rl->list);
+	if(rl->leaf)
+		free_percpu(rl->queue);
+	kfree(rl);
+}
+
+/* Conveniently ignore locking for now.  This is done in a slow-path,
+ * so it's OK to perhaps grab a mutex */
 int iso_rl_attach(struct iso_rl *rl, struct iso_rl *child) {
 	if(child->parent == rl)
 		return 0;
 
-	// TODO: ensure rl's and child's queues are flushed
+	/* TODO: ensure rl's and child's queues are flushed */
 	if(rl->leaf) {
 		rl->leaf = 0;
 		free_percpu(rl->queue);
@@ -184,19 +191,6 @@ int iso_rl_attach(struct iso_rl *rl, struct iso_rl *child) {
 	list_move_tail(&child->siblings, &rl->children);
 	child->parent = rl;
 	return 0;
-}
-
-void iso_rl_free(struct iso_rl *rl) {
-	list_del_init(&rl->list);
-	if(rl->leaf)
-		free_percpu(rl->queue);
-	kfree(rl);
-}
-
-/* Dequeue from active rate limiters on this cpu */
-void iso_rl_dequeue_root() {
-	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, smp_processor_id());
-	iso_rl_xmit_tasklet((unsigned long) cb);
 }
 
 /* Called with rcu lock */
@@ -294,7 +288,7 @@ void iso_rl_dequeue(unsigned long _q) {
 	struct sk_buff_head *skq, list;
 
 	/* Try to borrow from the global token pool; if that fails,
-	   program the timeout for this queue */
+	 * program the timeout for this queue */
 
 	if(unlikely(q->tokens < q->first_pkt_size)) {
 		timeout = iso_rl_borrow_tokens(rl, q);
@@ -344,6 +338,12 @@ void iso_rl_dequeue(unsigned long _q) {
 		iso_rl_activate_queue(q);
 		iso_rl_activate_tree(rl, q);
 	}
+}
+
+/* Dequeue from active rate limiters on this cpu */
+void iso_rl_dequeue_root() {
+	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, smp_processor_id());
+	iso_rl_xmit_tasklet((unsigned long) cb);
 }
 
 /* HARDIRQ timeout */
