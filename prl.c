@@ -71,7 +71,7 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 
 #define budget 500
 
-	if(iso_exiting)
+	if(unlikely(iso_exiting))
 		return;
 
 	/* Do a single pass over all backlogged RLs and trickle down tokens */
@@ -79,7 +79,7 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 
 #ifdef DEBUG
 	{
-		/* This block is not needed, but just for debugging purposes */
+		/* This block is just for debugging purposes */
 		ktime_t last;
 		last = cb->last;
 		cb->last = ktime_get();
@@ -338,7 +338,7 @@ void iso_rl_dequeue(unsigned long _q) {
 }
 
 /* Dequeue from active rate limiters on this cpu */
-void iso_rl_dequeue_root() {
+inline void iso_rl_dequeue_root() {
 	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, smp_processor_id());
 	iso_rl_xmit_tasklet((unsigned long) cb);
 }

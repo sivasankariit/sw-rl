@@ -71,7 +71,7 @@ extern struct iso_rl_cb __percpu *rlcb;
 extern struct iso_rl *rootrl;
 extern struct list_head rls;
 
-// Parameters
+/* The few rate limiter parameters */
 extern int ISO_TOKENBUCKET_TIMEOUT_NS;
 extern int ISO_MAX_BURST_TIME_US;
 extern int ISO_BURST_FACTOR;
@@ -87,7 +87,7 @@ int iso_rl_init(struct iso_rl *);
 
 struct iso_rl *iso_rl_new(char *name);
 int iso_rl_attach(struct iso_rl *parent, struct iso_rl *child);
-void iso_rl_dequeue_root(void);
+inline void iso_rl_dequeue_root(void);
 
 void iso_rl_free(struct iso_rl *);
 void iso_rl_show(struct iso_rl *, struct seq_file *);
