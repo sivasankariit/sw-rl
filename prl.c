@@ -446,7 +446,7 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	struct iso_rl *childrl, *rlnext;
 	unsigned long flags;
-	u32 child_share;
+	u32 child_share_unit, child_share;
 
 	spin_lock_irqsave(&rl->spinlock, flags);
 	if(rl->parent == NULL) {
@@ -461,11 +461,12 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 		goto unlock;
 	}
 
-	child_share = rl->total_tokens / rl->active_weight;
-	if(child_share == 0)
+	child_share_unit = rl->total_tokens / rl->active_weight;
+	if(child_share_unit == 0)
 		goto unlock;
 
 	list_for_each_entry_safe(childrl, rlnext, &rl->waiting_list, waiting_node) {
+		child_share = childrl->weight * child_share_unit;
 		rl->total_tokens -= child_share;
 		_iso_rl_fill_tokens(childrl, child_share);
 	}
