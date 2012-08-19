@@ -6,8 +6,6 @@ struct iso_rl *rootrl;
 struct list_head rls;
 extern int iso_exiting;
 
-inline u64 iso_rl_determine_rate(struct iso_rl *rl);
-
 int ISO_TOKENBUCKET_TIMEOUT_NS=25*1000;
 int ISO_MAX_BURST_TIME_US=100;
 int ISO_BURST_FACTOR=8;
@@ -99,8 +97,6 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 			break;
 		}
 
-		//q->rl->rate = iso_rl_determine_rate(q->rl);
-		//iso_rl_clock(q->rl);
 		iso_rl_dequeue((unsigned long)q);
 	}
 
@@ -358,15 +354,6 @@ enum hrtimer_restart iso_rl_timeout(struct hrtimer *timer) {
 	return HRTIMER_NORESTART;
 }
 
-inline u64 iso_rl_determine_rate(struct iso_rl *rl) {
-	if(rl->parent == NULL || rl->parent->active_weight == 0 || !rl->waiting)
-		return rl->rate;
-	if(rl->waiting && rl->parent && rl->parent->active_weight == 1)
-		return rl->rate;
-	return iso_rl_determine_rate(rl->parent) * rl->weight / (rl->parent->active_weight);
-}
-
-
 inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 	unsigned long flags;
 	u64 borrow;
@@ -376,9 +363,6 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 		return timeout;
 
 	borrow = max(iso_rl_singleq_burst(rl), (u64)q->first_pkt_size);
-
-	//rl->rate = iso_rl_determine_rate(rl);
-	//iso_rl_clock(rl);
 
 	if(rl->total_tokens >= borrow) {
 		rl->total_tokens -= borrow;
@@ -423,8 +407,8 @@ inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 				parent->active_weight += rl->weight;
 				list_add_tail(&rl->waiting_node, &parent->waiting_list);
 			} else {
-				// parent has something waiting already, so it would
-				// already be present in its parent's waiting list
+				/* parent has something waiting already, so it would
+				 * already be present in its parent's waiting list */
 				done = 1;
 			}
 			spin_unlock_irqrestore(&parent->spinlock, flags);
@@ -449,7 +433,8 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 				parent->active_weight -= rl->weight;
 				list_del_init(&rl->waiting_node);
 			} else {
-				// parent still has someone else waiting, so let's not remove parent from the tree
+				/* parent still has someone else waiting, so let's not
+				 * remove parent from the tree */
 				done = 1;
 			}
 			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
@@ -466,13 +451,15 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	u32 child_share;
 
 	spin_lock_irqsave(&rl->spinlock, flags);
-	if(rl->parent == NULL)
+	if(rl->parent == NULL) {
 		iso_rl_clock(rl);
-	else
+	} else {
+		/* TODO: cap total_tokens and carry over the unused tokens */
 		rl->total_tokens += tokens;
+	}
 
 	if(!rl->active_weight) {
-		// we've reached a leaf, so just unlock and get away!
+		/* we've reached a leaf, so just unlock and get away! */
 		goto unlock;
 	}
 
@@ -490,7 +477,7 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 }
 
 inline void iso_rl_fill_tokens(void) {
-	// Simulatneous execution unnecessary
+	/* Needn't execute this simultaneously on all CPUs */
 	static unsigned long flags = 0;
 	if(test_and_set_bit(0, &flags)) {
 		_iso_rl_fill_tokens(rootrl, 0);
