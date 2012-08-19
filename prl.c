@@ -199,26 +199,26 @@ void iso_rl_show(struct iso_rl *rl, struct seq_file *s) {
 	int i, first = 1;
 
 	seq_printf(s, "name %s  parent %s  rate %u  total_tokens %llu   last %llx   %p (%p)\n",
-             rl->name, rl->parent ? rl->parent->name : "(root)",
-             rl->rate, rl->total_tokens, *(u64 *)&rl->last_update_time,
-             rl, rl->parent);
+			   rl->name, rl->parent ? rl->parent->name : "(root)",
+			   rl->rate, rl->total_tokens, *(u64 *)&rl->last_update_time,
+			   rl, rl->parent);
 
 	seq_printf(s, "   wt %d, aw %d, waiting %d\n",
-						 rl->weight, rl->active_weight, rl->waiting);
+			   rl->weight, rl->active_weight, rl->waiting);
 
 	for_each_online_cpu(i) {
 		if(first) {
 			seq_printf(s, "\tcpu   len"
-								 "   first_len   queued   tokens  active?\n");
+					   "   first_len   queued   tokens  active?\n");
 			first = 0;
 		}
 		q = per_cpu_ptr(rl->queue, i);
 
 		if(q->tokens > 0 || skb_queue_len(&q->list) > 0) {
 			seq_printf(s, "\t%3d   %3d   %3d   %10llu   %10llu   %d,%d\n",
-								 i, skb_queue_len(&q->list), q->first_pkt_size,
-								 q->bytes_enqueued, q->tokens,
-								 !list_empty(&q->active_list), hrtimer_active(q->cputimer));
+					   i, skb_queue_len(&q->list), q->first_pkt_size,
+					   q->bytes_enqueued, q->tokens,
+					   !list_empty(&q->active_list), hrtimer_active(q->cputimer));
 		}
 	}
 }
@@ -254,7 +254,6 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 
 #define MIN_PKT_SIZE (600)
 	q = per_cpu_ptr(rl->queue, cpu);
-	// iso_rl_clock(rl);
 	len = (s32) skb_size(pkt);
 
 	if(q->bytes_enqueued + len > ISO_MAX_QUEUE_LEN_BYTES) {
@@ -285,7 +284,7 @@ void iso_rl_dequeue(unsigned long _q) {
 	struct sk_buff *pkt;
 	struct iso_rl_queue *q = (struct iso_rl_queue *)_q;
 	struct iso_rl *rl = q->rl;
-	struct sk_buff_head *skq, list;
+	struct sk_buff_head *skq;
 
 	/* Try to borrow from the global token pool; if that fails,
 	 * program the timeout for this queue */
@@ -296,11 +295,10 @@ void iso_rl_dequeue(unsigned long _q) {
 			goto timeout;
 	}
 
-	skb_queue_head_init(&list);
 	skq = &q->list;
 
 	if(skb_queue_len(skq) == 0)
-		goto unlock;
+		goto done;
 
 	pkt = skb_peek(skq);
 	sum = size = skb_size(pkt);
@@ -326,17 +324,16 @@ void iso_rl_dequeue(unsigned long _q) {
 		q->first_pkt_size = size;
 	}
 
- unlock:
-
-	if(!timeout) {
-		iso_rl_deactivate_queue(q);
-		iso_rl_deactivate_tree(rl, q);
-	}
-
- timeout:
-	if(timeout && !iso_exiting) {
-		iso_rl_activate_queue(q);
-		iso_rl_activate_tree(rl, q);
+ done:
+	if(likely(!iso_exiting)) {
+		if(!timeout) {
+			iso_rl_deactivate_queue(q);
+			iso_rl_deactivate_tree(rl, q);
+		} else {
+		timeout:
+			iso_rl_activate_queue(q);
+			iso_rl_activate_tree(rl, q);
+		}
 	}
 }
 
