@@ -19,7 +19,7 @@ int ISO_MIN_BURST_BYTES=65536;
 /* Called the first time when the module is initialised */
 int iso_rl_prep() {
 	int cpu;
-  INIT_LIST_HEAD(&rls);
+	INIT_LIST_HEAD(&rls);
 
 	rlcb = alloc_percpu(struct iso_rl_cb);
 	if(rlcb == NULL)
@@ -44,11 +44,11 @@ int iso_rl_prep() {
 		cb->cpu = cpu;
 	}
 
-  rootrl = iso_rl_new("root");
-  if(rootrl == NULL) {
-    free_percpu(rlcb);
-    return -1;
-  }
+	rootrl = iso_rl_new("root");
+	if(rootrl == NULL) {
+		free_percpu(rlcb);
+		return -1;
+	}
 
 	return 0;
 }
@@ -81,13 +81,13 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 	iso_rl_fill_tokens();
 
 #ifdef DEBUG
-  {
+	{
 		/* This block is not needed, but just for debugging purposes */
-    ktime_t last;
-    last = cb->last;
-    cb->last = ktime_get();
-    cb->avg_us = ktime_us_delta(cb->last, last);
-  }
+		ktime_t last;
+		last = cb->last;
+		cb->last = ktime_get();
+		cb->avg_us = ktime_us_delta(cb->last, last);
+	}
 #endif
 
 	first = list_entry(cb->active_list.next, struct iso_rl_queue, active_list);
@@ -117,8 +117,9 @@ int iso_rl_init(struct iso_rl *rl) {
 	rl->total_tokens = 15000;
 	rl->last_update_time = ktime_get();
 	rl->queue = alloc_percpu(struct iso_rl_queue);
-  if(rl->queue == NULL)
-    return -1;
+
+	if(rl->queue == NULL)
+		return -1;
 
 	rl->weight = 1;
 	rl->active_weight = 0;
@@ -156,61 +157,44 @@ int iso_rl_init(struct iso_rl *rl) {
 }
 
 struct iso_rl *iso_rl_new(char *name) {
-  struct iso_rl *rl = kmalloc(sizeof(*rl), GFP_KERNEL);
-  if(rl == NULL) {
-    printk(KERN_INFO "Could not allocate rl %s\n", name);
-    return NULL;
-  }
+	struct iso_rl *rl = kmalloc(sizeof(*rl), GFP_KERNEL);
+	if(rl == NULL) {
+		printk(KERN_INFO "Could not allocate rl %s\n", name);
+		return NULL;
+	}
 
-  if(iso_rl_init(rl)) {
-    printk(KERN_INFO "rl %s init failed\n", name);
-    kfree(rl);
-    return NULL;
-  }
+	if(iso_rl_init(rl)) {
+		printk(KERN_INFO "rl %s init failed\n", name);
+		kfree(rl);
+		return NULL;
+	}
 
-  strcpy(rl->name, name);
-  list_add_tail(&rl->list, &rls);
-  return rl;
+	strcpy(rl->name, name);
+	list_add_tail(&rl->list, &rls);
+	return rl;
 }
 
 // Conveniently ignore locking for now
 int iso_rl_attach(struct iso_rl *rl, struct iso_rl *child) {
-  if(child->parent == rl)
-    return 0;
+	if(child->parent == rl)
+		return 0;
 
-  // TODO: ensure rl's and child's queues are flushed
-  if(rl->leaf) {
-    rl->leaf = 0;
-    free_percpu(rl->queue);
-  }
+	// TODO: ensure rl's and child's queues are flushed
+	if(rl->leaf) {
+		rl->leaf = 0;
+		free_percpu(rl->queue);
+	}
 
-  list_move_tail(&child->siblings, &rl->children);
-  child->parent = rl;
-  return 0;
+	list_move_tail(&child->siblings, &rl->children);
+	child->parent = rl;
+	return 0;
 }
 
 void iso_rl_free(struct iso_rl *rl) {
-  list_del_init(&rl->list);
-  if(rl->leaf)
-    free_percpu(rl->queue);
+	list_del_init(&rl->list);
+	if(rl->leaf)
+		free_percpu(rl->queue);
 	kfree(rl);
-}
-
-/* UNUSED: Walk the entire tree and dequeue.
- * TODO: Would be nice to walk only the active subtree. */
-void _iso_rl_dequeue(struct iso_rl *rl, int cpu) {
-  struct iso_rl *child;
-
-  if(rl->leaf) {
-    struct iso_rl_queue *q = per_cpu_ptr(rl->queue, cpu);
-    iso_rl_clock(rl);
-    iso_rl_dequeue((unsigned long)q);
-    return;
-  }
-
-  list_for_each_entry(child, &rl->children, siblings) {
-    _iso_rl_dequeue(child, cpu);
-  }
 }
 
 /* Dequeue from active rate limiters on this cpu */
@@ -377,8 +361,8 @@ enum hrtimer_restart iso_rl_timeout(struct hrtimer *timer) {
 inline u64 iso_rl_determine_rate(struct iso_rl *rl) {
 	if(rl->parent == NULL || rl->parent->active_weight == 0 || !rl->waiting)
 		return rl->rate;
-  if(rl->waiting && rl->parent && rl->parent->active_weight == 1)
-    return rl->rate;
+	if(rl->waiting && rl->parent && rl->parent->active_weight == 1)
+		return rl->rate;
 	return iso_rl_determine_rate(rl->parent) * rl->weight / (rl->parent->active_weight);
 }
 
