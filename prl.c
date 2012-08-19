@@ -351,6 +351,8 @@ enum hrtimer_restart iso_rl_timeout(struct hrtimer *timer) {
 	return HRTIMER_NORESTART;
 }
 
+/* TODO: i think this function can be replaced with a simple
+ * atomic_dec_if_greater or equivalent */
 inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 	unsigned long flags;
 	u64 borrow;
@@ -376,8 +378,7 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 
 inline void iso_rl_activate_queue(struct iso_rl_queue *q) {
 	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
-	// TODO: add front or back of list depending on q->rl->rate
-	// Have 4 priorities: 4 (highest), 3 (5--8G), 2 (1--4G), 1 (< 1G)
+	/* TODO: add front or back of list depending on q->rl->weight */
 	if(list_empty(&q->active_list))
 		list_add_tail(&q->active_list, &cb->active_list);
 
