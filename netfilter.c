@@ -36,24 +36,14 @@ int iso_tx_hook_init(void);
 void iso_tx_hook_exit(void);
 
 inline void skb_xmit(struct sk_buff *skb) {
-#define dst(skb) skb_dst(skb)
-
-#if 0
-	if(dst(skb)->hh)
-		neigh_hh_output(dst(skb)->hh, skb);
-	else if(dst(skb)->neighbour)
-		dst(skb)->neighbour->output(skb);
-#endif
-
 	ok_fn_t okfn = OKPTR(skb)->function;
-	if(okfn) {
+	if(likely(okfn)) {
 		okfn(skb);
 	} else {
 		if(net_ratelimit())
 			printk(KERN_INFO "prl: couldn't handle buff %p\n", skb);
 		kfree_skb(skb);
 	}
-#undef dst
 }
 
 int iso_tx_hook_init() {
