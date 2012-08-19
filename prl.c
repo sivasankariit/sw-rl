@@ -78,7 +78,7 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 
 	// determine all rates in one pass.  maybe use just a single lock
 	// for this calculation?
-	// iso_rl_determine_rates();
+	iso_rl_fill_tokens();
 
 #ifdef DEBUG
   {
@@ -99,9 +99,8 @@ void iso_rl_xmit_tasklet(unsigned long _cb) {
 			break;
 		}
 
-		// list_del_init(&q->active_list);
-		q->rl->rate = iso_rl_determine_rate(q->rl);
-		iso_rl_clock(q->rl);
+		//q->rl->rate = iso_rl_determine_rate(q->rl);
+		//iso_rl_clock(q->rl);
 		iso_rl_dequeue((unsigned long)q);
 	}
 
@@ -149,6 +148,8 @@ int iso_rl_init(struct iso_rl *rl) {
   INIT_LIST_HEAD(&rl->list);
   INIT_LIST_HEAD(&rl->siblings);
   INIT_LIST_HEAD(&rl->children);
+  INIT_LIST_HEAD(&rl->waiting_list);
+  INIT_LIST_HEAD(&rl->waiting_node);
   rl->leaf = 1;
   rl->parent = NULL;
   return 0;
@@ -302,19 +303,6 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	return verdict;
 }
 
-inline void iso_rl_activate_queue(struct iso_rl_queue *q) {
-	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
-	// TODO: add front or back of list depending on q->rl->rate
-	// Have 4 priorities: 4 (highest), 3 (5--8G), 2 (1--4G), 1 (< 1G)
-	if(list_empty(&q->active_list))
-		list_add_tail(&q->active_list, &cb->active_list);
-}
-
-inline void iso_rl_deactivate_queue(struct iso_rl_queue *q) {
-	if(!list_empty(&q->active_list))
-		list_del_init(&q->active_list);
-}
-
 /* This function MUST be executed with interrupts enabled */
 void iso_rl_dequeue(unsigned long _q) {
 	int timeout = 0;
@@ -328,7 +316,6 @@ void iso_rl_dequeue(unsigned long _q) {
 	/* Try to borrow from the global token pool; if that fails,
 	   program the timeout for this queue */
 
-	iso_rl_deactivate_queue(q);
 	if(unlikely(q->tokens < q->first_pkt_size)) {
 		timeout = iso_rl_borrow_tokens(rl, q);
 		if(timeout)
@@ -368,35 +355,14 @@ void iso_rl_dequeue(unsigned long _q) {
  unlock:
 
 	if(!timeout) {
-		unsigned long flags;
-
-		if(q->waiting && rl->parent) {
-			q->waiting = 0;
-			spin_lock_irqsave(&rl->parent->spinlock, flags);
-			rl->waiting -= 1;
-			if(rl->waiting == 0)
-				rl->parent->active_weight -= rl->weight;
-			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
-		}
+		iso_rl_deactivate_queue(q);
+		iso_rl_deactivate_tree(rl, q);
 	}
 
  timeout:
 	if(timeout && !iso_exiting) {
-		struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
-		unsigned long flags;
-
 		iso_rl_activate_queue(q);
-		if(!q->waiting && rl->parent) {
-			q->waiting = 1;
-			spin_lock_irqsave(&rl->parent->spinlock, flags);
-			rl->waiting += 1;
-			if(rl->waiting == 1)
-				rl->parent->active_weight += rl->weight;
-			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
-		}
-
-		if(!hrtimer_active(&cb->timer))
-			hrtimer_start(&cb->timer, iso_rl_gettimeout(), HRTIMER_MODE_REL_PINNED);
+		iso_rl_activate_tree(rl, q);
 	}
 }
 
@@ -441,6 +407,113 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 
 	spin_unlock_irqrestore(&rl->spinlock, flags);
 	return timeout;
+}
+
+inline void iso_rl_activate_queue(struct iso_rl_queue *q) {
+	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
+	// TODO: add front or back of list depending on q->rl->rate
+	// Have 4 priorities: 4 (highest), 3 (5--8G), 2 (1--4G), 1 (< 1G)
+	if(list_empty(&q->active_list))
+		list_add_tail(&q->active_list, &cb->active_list);
+
+	if(!hrtimer_active(&cb->timer))
+		hrtimer_start(&cb->timer, iso_rl_gettimeout(), HRTIMER_MODE_REL_PINNED);
+}
+
+inline void iso_rl_deactivate_queue(struct iso_rl_queue *q) {
+	if(!list_empty(&q->active_list))
+		list_del_init(&q->active_list);
+}
+
+inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
+	unsigned long flags, done;
+	struct iso_rl *parent = rl->parent;
+
+	if(!q->waiting && parent) {
+		q->waiting = 1;
+		done = 0;
+		do {
+			spin_lock_irqsave(&parent->spinlock, flags);
+			rl->waiting += 1;
+			if(rl->waiting == 1) {
+				parent->active_weight += rl->weight;
+				list_add_tail(&rl->waiting, &parent->waiting_children);
+			} else {
+				// parent has something waiting already, so it would
+				// already be present in its parent's waiting list
+				done = 1;
+			}
+			spin_unlock_irqrestore(&parent->spinlock, flags);
+			rl = parent;
+			parent = rl->parent;
+		} while(!done && parent);
+	}
+}
+
+inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
+	unsigned long flags, done;
+	struct iso_rl *parent = rl->parent;
+
+	if(q->waiting && parent) {
+		q->waiting = 0;
+		done = 0;
+
+		do {
+			spin_lock_irqsave(&parent->spinlock, flags);
+			rl->waiting -= 1;
+			if(rl->waiting == 0) {
+				parent->active_weight -= rl->weight;
+				list_del_init(&rl->waiting_node, &parent->waiting_list);
+			} else {
+				// parent still has someone else waiting, so let's not remove parent from the tree
+				done = 1;
+			}
+			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
+
+			rl = parent;
+			parent = rl->parent;
+		} while(!done && parent);
+	}
+}
+
+inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
+	struct iso_rl *childrl, *rlnext;
+	unsigned long flags;
+	u32 child_share;
+
+	spin_lock_irqsave(&rl->spinlock, flags);
+	if(rl->parent == NULL)
+		iso_rl_clock(rl);
+	else
+		rl->total_tokens += tokens;
+
+	// shouldn't happen actually...
+	if(!rl->active_weight) {
+		printk(KERN_INFO "BUG: shouldn't fill tokens on an inactive rate limiter!\n");
+		goto unlock;
+	}
+
+	child_share = rl->total_tokens / rl->active_weight;
+
+	if(child_share == 0)
+		goto unlock;
+
+	list_for_each_entry_safe(childrl, rlnext, &rl->waiting_list, waiting_node) {
+		rl->total_tokens -= child_share;
+		_iso_rl_fill_tokens(childrl, child_share);
+	}
+
+ unlock:
+	spin_unlock_irqrestore(&rl->spinlock, flags);
+}
+
+inline void iso_rl_fill_tokens(void) {
+	// Simulatneous execution unnecessary
+	static unsigned long flags = 0;
+	if(test_and_set_bit(0, &flags)) {
+		_iso_rl_fill_tokens(rootrl, 0);
+		clear_bit(0, &flags);
+	}
 }
 
 /* Local Variables: */

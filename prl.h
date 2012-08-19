@@ -46,6 +46,8 @@ struct iso_rl {
 	struct iso_rl *parent;
 	struct list_head siblings;
 	struct list_head children;
+	struct list_head waiting_list;
+	struct list_head waiting_node;
 
 	/* The list of all rls */
 	struct list_head list;
@@ -100,6 +102,9 @@ static inline u64 iso_rl_singleq_burst(struct iso_rl *);
 void iso_rl_xmit_tasklet(unsigned long _cb);
 inline void iso_rl_activate_queue(struct iso_rl_queue *q);
 inline void iso_rl_deactivate_queue(struct iso_rl_queue *q);
+
+inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q);
+inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q);
 
 static inline int skb_size(struct sk_buff *skb) {
 	return ETH_HLEN + skb->len;
