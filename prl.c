@@ -307,7 +307,10 @@ void iso_rl_dequeue(unsigned long _q) {
 		q->tokens -= size;
 		q->bytes_enqueued -= size;
 
-		// TODO: if skb_xmit fails, break
+		/* TODO: if skb_xmit fails, break.  With -DDIRECT: ONE failed
+		 * skb will be queued in the per-cpu softnet_data structure.
+		 * With -DNETFILTER: failed skbs will be dropped.
+		 */
 		skb_xmit(pkt);
 		q->bytes_xmit += size;
 
