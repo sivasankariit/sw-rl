@@ -480,7 +480,7 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 inline void iso_rl_fill_tokens(void) {
 	/* Needn't execute this simultaneously on all CPUs */
 	static unsigned long flags = 0;
-	if(test_and_set_bit(0, &flags)) {
+	if(!test_and_set_bit(0, &flags)) {
 		_iso_rl_fill_tokens(rootrl, 0);
 		clear_bit(0, &flags);
 	}
