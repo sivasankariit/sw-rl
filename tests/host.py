@@ -9,6 +9,7 @@ from time import sleep
 RL_MODULE = '/root/vimal/newrl.ko'
 DEFAULT_DEV = 'eth1'
 NETPERF_DIR = '/root/vimal'
+NETPERF_DIR = '/usr/bin'
 
 class HostList(object):
     def __init__(self, *lst):
@@ -32,8 +33,22 @@ def local_cmd(c):
     p = Popen(c, shell=True)
     p.wait()
 
+
+class ShellWrapper:
+    def __init__(self, chan):
+        self.chan = chan
+
+    def cmd_async(self, cmd):
+        self.chan.send("(%s;) &\n" % cmd)
+
+    def cmd(self, cmd):
+        self.chan.send(cmd)
+        self.chan.recv_ready()
+        return self.chan.recv(10**6)
+
 class Host(object):
     _ssh_cache = {}
+    _shell_cache = {}
     def __init__(self, addr):
         self.addr = addr
         # List of processes spawned async on this host
@@ -54,6 +69,18 @@ class Host(object):
             ssh.get_transport().set_keepalive(interval=5)
             Host._ssh_cache[self.addr] = ssh
         return ssh
+
+    def get_shell(self):
+        shell = Host._shell_cache.get(self.addr, None)
+        if shell is None:
+            client = self.get()
+            t = client.get_transport()
+            chan = t.open_session()
+            chan.exec_command("bash -s")
+            chan.send_ready()
+            shell = ShellWrapper(chan)
+            Host._shell_cache[self.addr] = shell
+        return shell
 
     def cmd(self, c, dryrun=False):
         self.log(c)
@@ -82,9 +109,10 @@ class Host(object):
         if not self.delay:
             if dryrun or self.dryrun:
                 return (self.addr, c)
-            ssh = self.get()
-            out = ssh.exec_command(c)
-            return out
+            #ssh = self.get()
+            #out = ssh.exec_command(c)
+            sh = self.get_shell()
+            sh.cmd_async(c)
         else:
             self.delayed_cmds.append(c)
         return (self.addr, c)
@@ -106,6 +134,9 @@ class Host(object):
 
     def get_10g_dev(self):
         return DEFAULT_DEV
+
+    def mkdir(self, dir):
+        self.cmd("mkdir -p %s" % dir)
 
     def rmmod(self, mod=RL_MODULE):
         self.cmd("rmmod %s" % mod)
@@ -144,7 +175,7 @@ class Host(object):
 
     # starting common apps
     def start_netserver(self):
-        self.cmd("%s/netserver" % NETPERF_DIR)
+        self.cmd_async("%s/netserver" % NETPERF_DIR)
 
     def start_netperf(self, args, outfile):
         self.cmd_async("%s/netperf %s 2>&1 > %s" % (NETPERF_DIR, args, outfile))
@@ -193,9 +224,7 @@ class Host(object):
 
     def copy_local(self, src_dir="/tmp", dst_dir=None, exptid=None):
         """Copy remote experiment output to a local directory for analysis"""
-        dir = os.path.abspath(dir)
-        expt = os.path.basename(dir)
-        if dir == "/tmp" or exptid is None:
+        if src_dir == "/tmp" or exptid is None:
             return
         if dst_dir is None:
             print "Please supply a destination directory to copy files to"

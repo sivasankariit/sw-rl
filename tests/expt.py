@@ -10,6 +10,10 @@ def progress(t):
         t -= 1
         sys.stdout.flush()
         sleep(1)
+
+    print ''
+    print T.colored('waiting...')
+    sleep(3)
     print '\r\n'
 
 class Expt(object):

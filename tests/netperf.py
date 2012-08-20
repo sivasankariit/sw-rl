@@ -2,10 +2,8 @@
 import sys
 import argparse
 import multiprocessing
-from common import *
 import termcolor as T
 from expt import Expt
-from iperf import Iperf
 from time import sleep
 from host import *
 
@@ -48,7 +46,7 @@ parser.add_argument('--time', '-t',
                     dest="t",
                     type=int,
                     help="Time to run the experiment",
-                    default=300)
+                    default=10)
 
 parser.add_argument('--dryrun',
                     dest="dryrun",
@@ -82,19 +80,22 @@ class Netperf(Expt):
         server = self.opts("hosts")[0]
         client = self.opts("hosts")[1]
 
-        self.server = server
-        self.client = client
+        self.server = Host(server)
+        self.client = Host(client)
         self.hlist = HostList()
-        self.hlist.append(server)
-        self.hlist.append(client)
+        self.hlist.append(self.server)
+        self.hlist.append(self.client)
 
-        server.start_netserver()
+        self.server.start_netserver()
+        self.hlist.mkdir(e(""))
         sleep(1)
         # Start the connections
         for i in xrange(self.opts("nrr")):
-            client.start_netperf("-v 2 -t TCP_RR -H %s --time -- -s (size)", e('rr-%d.txt' % i))
+            opts = "-v 2 -t TCP_RR -H %s -l %s -c -C" % (self.server.hostname(), self.opts("t"))
+            self.client.start_netperf(opts, e('rr-%d.txt' % i))
         for i in xrange(self.opts("ns")):
-            client.start_netperf("-t TCP_STREAM -H %s --time", e("stream-%d.txt" % i))
+            opts = "-t TCP_STREAM -H %s -l %s -c -C" % (self.server.hostname(), self.opts("t"))
+            self.client.start_netperf(opts, e("stream-%d.txt" % i))
         return
 
     def stop(self):
