@@ -12,6 +12,9 @@ parser.add_argument('--rr',
                     nargs="+",
                     help="rr files to parse")
 
+parser.add_argument('--out', '-o',
+                    help="save plot to file")
+
 args = parser.parse_args()
 rspaces = re.compile(r'\s+')
 
@@ -94,6 +97,10 @@ def plot():
     plt.xlabel("usec")
     plt.ylabel("fraction")
     plt.title("Total tps: %.3f" % total_tps)
-    plt.show()
+    if args.out is None:
+        plt.show()
+    else:
+        print 'saved to %s' % args.out
+        plt.savefig(args.out)
 
 plot()
