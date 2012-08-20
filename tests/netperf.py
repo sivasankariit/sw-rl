@@ -26,11 +26,6 @@ parser.add_argument('--pin',
                     action="store_true",
                     default=False)
 
-parser.add_argument('--dir',
-                    dest="dir",
-                    help="Directory to store output.",
-                    required=True)
-
 parser.add_argument('--exptid',
                     dest="exptid",
                     help="Experiment ID",
@@ -40,7 +35,7 @@ parser.add_argument('--rl',
                     dest="rl",
                     help="Which rate limiter to use",
                     choices=["htb", "hfsc", "newrl"],
-                    default="htb")
+                    default="")
 
 parser.add_argument('--time', '-t',
                     dest="t",
@@ -58,7 +53,7 @@ parser.add_argument('--hosts',
                     dest="hosts",
                     help="The two hosts (client/server) to run tests",
                     nargs="+",
-                    default=["xlh5","xlh6"])
+                    default=["xlh7","xlh6"])
 
 args = parser.parse_args()
 
@@ -66,17 +61,11 @@ def e(s):
     return "/tmp/%s/%s" % (args.exptid, s)
 
 class Netperf(Expt):
-    def initialise(self):
-        self.hlist.rmmod()
-        self.hlist.remove_qdiscs()
-        if self.opts("rl") == 'newrl':
-            self.hlist.insmod()
-
     def start(self):
         # num servers, num clients
         ns = self.opts("ns")
         nc = self.opts("nrr")
-        dir = self.opts("dir")
+        dir = self.opts("exptid")
         server = self.opts("hosts")[0]
         client = self.opts("hosts")[1]
 
@@ -86,16 +75,28 @@ class Netperf(Expt):
         self.hlist.append(self.server)
         self.hlist.append(self.client)
 
+        if self.opts("rl") == "htb":
+            self.server.add_htb_qdisc("5Gbit")
+        elif self.opts("rl") == 'newrl':
+            self.server.insmod()
+        else:
+            self.server.rmmod()
+            self.server.remove_qdiscs()
+
         self.server.start_netserver()
+        self.hlist.rmrf(e(""))
         self.hlist.mkdir(e(""))
         sleep(1)
         # Start the connections
-        for i in xrange(self.opts("nrr")):
-            opts = "-v 2 -t TCP_RR -H %s -l %s -c -C" % (self.server.hostname(), self.opts("t"))
-            self.client.start_netperf(opts, e('rr-%d.txt' % i))
-        for i in xrange(self.opts("ns")):
-            opts = "-t TCP_STREAM -H %s -l %s -c -C" % (self.server.hostname(), self.opts("t"))
-            self.client.start_netperf(opts, e("stream-%d.txt" % i))
+        if self.opts("nrr"):
+            opts = "-v 2 -t TCP_RR -H %s -l %s -c -C" % (self.server.hostname(),
+                                                         self.opts("t"))
+            self.client.start_n_netperfs(self.opts("nrr"), opts, e(''), "rr")
+
+        if self.opts("ns"):
+            opts = "-t TCP_STREAM -H %s -l %s -c -C" % (self.server.hostname(),
+                                                        self.opts("t"))
+            self.client.start_n_netperfs(self.opts("ns"), opts, e(''), "stream")
         return
 
     def stop(self):
