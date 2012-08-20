@@ -90,7 +90,7 @@ def plot():
         plot_cdf(c[0], c[1], alpha=0.1)
         total_tps += r.tps
     agg_cdf = cdf(sorted(list(hist.iteritems())))
-    plot_cdf(agg_cdf[0], agg_cdf[1], lw=2, color='blue')
+    plot_cdf(agg_cdf[0], agg_cdf[1], lw=2, color='red')
     plt.xlim((0, 1e4))
     plt.yticks( map(lambda y: y/10.0, range(0, 11)) )
     plt.grid(True)
