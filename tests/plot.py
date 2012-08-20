@@ -88,6 +88,8 @@ class RRParser:
 def plot():
     hist = defaultdict(int)
     total_tps = 0
+    total_out_mbps = 0
+    total_in_mbps = 0
     def combine(hnew):
         for val,num in hnew:
             hist[val] += num
@@ -97,7 +99,10 @@ def plot():
         c = cdf(r.histogram)
         combine(r.histogram)
         plot_cdf(c[0], c[1], alpha=0.1)
+
         total_tps += r.tps
+        total_out_mbps += r.mbps_out
+        total_in_mbps += r.mbps_in
     agg_cdf = cdf(sorted(list(hist.iteritems())))
     plot_cdf(agg_cdf[0], agg_cdf[1], lw=2, color='red')
     plt.xlim((0, 1e4))
@@ -105,7 +110,7 @@ def plot():
     plt.grid(True)
     plt.xlabel("usec")
     plt.ylabel("fraction")
-    plt.title("Total tps: %.3f" % total_tps)
+    plt.title("Total tps: %.3f / %.3fMbps IN" % (total_tps, total_in_mbps))
     if args.ymin is not None:
         plt.ylim((args.ymin, 1))
     if args.out is None:
