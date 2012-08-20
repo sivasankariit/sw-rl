@@ -5,11 +5,13 @@ import termcolor as T
 import os
 import socket
 from time import sleep
+import pexpect
 
 RL_MODULE = '/root/vimal/newrl.ko'
 DEFAULT_DEV = 'eth1'
 NETPERF_DIR = '/root/vimal'
-NETPERF_DIR = '/usr/bin'
+# NETPERF_DIR = '/usr/bin'
+SHELL_PROMPT = '#'
 
 class HostList(object):
     def __init__(self, *lst):
@@ -41,10 +43,22 @@ class ShellWrapper:
     def cmd_async(self, cmd):
         self.chan.send("(%s;) &\n" % cmd)
 
-    def cmd(self, cmd):
-        self.chan.send(cmd)
+    def cmd(self, c):
+        self.chan.send(c)
         self.chan.recv_ready()
         return self.chan.recv(10**6)
+
+class SSHWrapper:
+    def __init__(self, ssh):
+        self.ssh = ssh
+
+    def cmd_async(self, cmd):
+        cmd = "(%s;) &" % cmd
+        self.ssh.sendline(cmd)
+
+    def cmd(self, c):
+        self.ssh.sendline(c)
+        self.ssh.expect(SHELL_PROMPT)
 
 class Host(object):
     _ssh_cache = {}
@@ -62,11 +76,9 @@ class Host(object):
 
     def get(self):
         ssh = Host._ssh_cache.get(self.addr, None)
-        if ssh is None or ssh._transport is None:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(self.addr, username='root')
-            ssh.get_transport().set_keepalive(interval=5)
+        if ssh is None:
+            ssh = pexpect.spawn("ssh %s" % self.addr)
+            ssh.expect(SHELL_PROMPT)
             Host._ssh_cache[self.addr] = ssh
         return ssh
 
@@ -74,11 +86,7 @@ class Host(object):
         shell = Host._shell_cache.get(self.addr, None)
         if shell is None:
             client = self.get()
-            t = client.get_transport()
-            chan = t.open_session()
-            chan.exec_command("bash -s")
-            chan.send_ready()
-            shell = ShellWrapper(chan)
+            shell = SSHWrapper(client)
             Host._shell_cache[self.addr] = shell
         return shell
 
@@ -88,8 +96,8 @@ class Host(object):
             if dryrun or self.dryrun:
                 return (self.addr, c)
             ssh = self.get()
-            out = ssh.exec_command(c)[1].read()
-            return out
+            self.get_shell().cmd(c)
+            return (self.addr, c)
         else:
             self.delayed_cmds.append(c)
         return (self.addr, c)
