@@ -15,6 +15,14 @@ parser.add_argument('--rr',
 parser.add_argument('--out', '-o',
                     help="save plot to file")
 
+parser.add_argument('--ymin',
+                    type=float,
+                    help="zoom into (ymin,1) on yaxis")
+
+parser.add_argument('--xlog',
+                    action="store_true",
+                    help="make x-axis log scale")
+
 args = parser.parse_args()
 rspaces = re.compile(r'\s+')
 
@@ -31,7 +39,8 @@ def cdf(lst):
 def plot_cdf(x, y, **opts):
     #plt.figure()
     plt.plot(x, y, **opts)
-    plt.xscale("log")
+    if args.xlog:
+        plt.xscale("log")
     #plt.show()
 
 class RRParser:
@@ -92,11 +101,13 @@ def plot():
     agg_cdf = cdf(sorted(list(hist.iteritems())))
     plot_cdf(agg_cdf[0], agg_cdf[1], lw=2, color='red')
     plt.xlim((0, 1e4))
-    plt.yticks( map(lambda y: y/10.0, range(0, 11)) )
+    plt.figure(1).get_axes()[0].yaxis.set_major_locator(mp.ticker.MaxNLocator(10))
     plt.grid(True)
     plt.xlabel("usec")
     plt.ylabel("fraction")
     plt.title("Total tps: %.3f" % total_tps)
+    if args.ymin is not None:
+        plt.ylim((args.ymin, 1))
     if args.out is None:
         plt.show()
     else:
