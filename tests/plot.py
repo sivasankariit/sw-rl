@@ -35,7 +35,10 @@ class RRParser:
     def __init__(self, filename):
         self.filename = filename
         self.lines = open(filename).readlines()
-        self.parse()
+        try:
+            self.parse()
+        except:
+            print 'error parsing %s' % filename
 
     def parse(self):
         tps_line = self.lines[6]
@@ -72,6 +75,7 @@ class RRParser:
 
 def plot():
     hist = defaultdict(int)
+    total_tps = 0
     def combine(hnew):
         for val,num in hnew:
             hist[val] += num
@@ -81,6 +85,7 @@ def plot():
         c = cdf(r.histogram)
         combine(r.histogram)
         plot_cdf(c[0], c[1], alpha=0.1)
+        total_tps += r.tps
     agg_cdf = cdf(sorted(list(hist.iteritems())))
     plot_cdf(agg_cdf[0], agg_cdf[1], lw=2, color='blue')
     plt.xlim((0, 1e4))
@@ -88,6 +93,7 @@ def plot():
     plt.grid(True)
     plt.xlabel("usec")
     plt.ylabel("fraction")
+    plt.title("Total tps: %.3f" % total_tps)
     plt.show()
 
 plot()
