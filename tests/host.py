@@ -8,7 +8,7 @@ from time import sleep
 import pexpect
 
 RL_MODULE = '/root/vimal/newrl.ko'
-DEFAULT_DEV = 'eth1'
+DEFAULT_DEV = 'eth0'
 NETPERF_DIR = '/root/vimal'
 # NETPERF_DIR = '/usr/bin'
 SHELL_PROMPT = '#'
@@ -146,6 +146,13 @@ class Host(object):
     def mkdir(self, dir):
         self.cmd("mkdir -p %s" % dir)
 
+    def rmrf(self, dir):
+        print T.colored("removing %s" % dir, "red", attrs=["bold"])
+        if dir == "/tmp" or dir == "~" or dir == "/":
+            # useless
+            return
+        self.cmd("rm -rf %s" % dir)
+
     def rmmod(self, mod=RL_MODULE):
         self.cmd("rmmod %s" % mod)
 
@@ -164,7 +171,8 @@ class Host(object):
         self.remove_qdiscs()
         self.rmmod()
         c  = "tc qdisc add dev %s root handle 1: htb default 1;" % iface
-        c += "tc class add dev %s classid 1:1 parent 1: htb rate %s mtu 65000 burst 15k;" % rate
+        c += "tc class add dev %s classid 1:1 parent 1: " % iface
+        c += "htb rate %s mtu 65000 burst 15k;" % rate
         self.cmd(c)
 
     def killall(self, extra=""):
@@ -187,6 +195,16 @@ class Host(object):
 
     def start_netperf(self, args, outfile):
         self.cmd_async("%s/netperf %s 2>&1 > %s" % (NETPERF_DIR, args, outfile))
+
+    def start_n_netperfs(self, n, args, dir, outfile_prefix):
+        cmd = "for i in `seq 1 %s`; " % n
+        cmd += "  do (%s/netperf %s 2>&1 > %s/%s-$i.txt &);" % (NETPERF_DIR,
+                                                                args,
+                                                                dir,
+                                                                outfile_prefix)
+        cmd += " done;"
+        self.cmd(cmd)
+        return
 
     # Monitoring scripts
     def start_cpu_monitor(self, dir="/tmp"):
@@ -230,15 +248,18 @@ class Host(object):
         return [self.start_cpu_monitor(dir),
                 self.start_bw_monitor(dir)]
 
-    def copy_local(self, src_dir="/tmp", dst_dir=None):
+    def copy_local(self, src_dir="/tmp", exptid=None):
         """Copy remote experiment output to a local directory for analysis"""
         if src_dir == "/tmp":
             return
-        if dst_dir is None:
-            print "Please supply a destination directory to copy files to"
+        if exptid is None:
+            print "Please supply experiment id"
             return
+
+        # First compress output
+        self.cmd("tar czf /tmp/%s.tar.gz %s --xform='s|tmp/||'" % (exptid, src_dir))
         opts = "-o StrictHostKeyChecking=no"
-        c = "scp %s -r %s:%s/* %s" % (opts, self.hostname(), src_dir, dst_dir)
+        c = "scp %s -r %s:/tmp/%s.tar.gz ." % (opts, self.hostname(), exptid)
         print "Copying experiment output"
         local_cmd(c)
 
