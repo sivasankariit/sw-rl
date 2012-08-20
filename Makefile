@@ -7,7 +7,7 @@ EXTRA_CFLAGS += -DNETFILTER -O2
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd`
-	modinfo ./prl.ko
+	modinfo ./newrl.ko
 
 clean:
 	rm *.o *.ko
