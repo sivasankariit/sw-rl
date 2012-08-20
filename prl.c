@@ -206,6 +206,10 @@ void iso_rl_show(struct iso_rl *rl, struct seq_file *s) {
 	seq_printf(s, "   wt %d, aw %d, waiting %d\n",
 			   rl->weight, rl->active_weight, rl->waiting);
 
+	/* intermediate nodes in the hierarchy do not have queues */
+	if(!rl->leaf)
+	  return;
+
 	for_each_online_cpu(i) {
 		if(first) {
 			seq_printf(s, "\tcpu   len"
