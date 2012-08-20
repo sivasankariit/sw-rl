@@ -230,13 +230,16 @@ class Host(object):
         return [self.start_cpu_monitor(dir),
                 self.start_bw_monitor(dir)]
 
-    def copy_local(self, src_dir="/tmp", dst_dir=None, exptid=None):
+    def copy_local(self, src_dir="/tmp", dst_dir=None):
         """Copy remote experiment output to a local directory for analysis"""
-        if src_dir == "/tmp" or exptid is None:
+        if src_dir == "/tmp":
             return
         if dst_dir is None:
             print "Please supply a destination directory to copy files to"
-        c = "scp -o StrictHostKeyChecking=no -r %s:%s/* %s" % (self.hostname, src_dir, dst_dir)
+            return
+        opts = "-o StrictHostKeyChecking=no"
+        c = "scp %s -r %s:%s/* %s" % (opts, self.hostname(), src_dir, dst_dir)
+        print "Copying experiment output"
         local_cmd(c)
 
     def hostname(self):

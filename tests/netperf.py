@@ -100,7 +100,7 @@ class Netperf(Expt):
 
     def stop(self):
         self.hlist.killall("iperf netperf netserver")
-        self.client.copy_local(self.opts("dir"), self.opts("exptid"))
+        self.client.copy_local(e(''), self.opts("exptid"))
         return
 
 Netperf(vars(args)).run()
