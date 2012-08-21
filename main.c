@@ -27,7 +27,7 @@ static int iso_init(void);
 static void iso_exit(void);
 struct iso_rl *p5001, *rest;
 struct iso_rl *testrls[128];
-
+int ntestrls;
 int iso_exiting;
 
 int iso_tx_hook_init(void);
@@ -36,15 +36,27 @@ void iso_tx_hook_exit(void);
 static void test(void) {
   char name[32];
   int i;
-  for(i = 0; i < 128; i++) {
+  ntestrls = 128;
+  for(i = 0; i < ntestrls; i++) {
     sprintf(name, "rl%d", i);
     testrls[i] = iso_rl_new(name);
     testrls[i]->weight = 1;
     iso_rl_attach(rootrl, testrls[i]);
-    testrls[i]->rate = rate/128;
+    testrls[i]->rate = rate/ntestrls;
   }
 }
 
+static void test2(void) {
+	ntestrls = 2;
+	testrls[0] = iso_rl_new("cap");
+	testrls[0]->cap = 1;
+	testrls[0]->rate = 100;
+	iso_rl_attach(rootrl, testrls[0]);
+
+	testrls[1] = iso_rl_new("rest");
+	testrls[1]->cap = 0;
+	iso_rl_attach(rootrl, testrls[1]);
+}
 
 static int iso_init() {
 	int i, ret = -1;
