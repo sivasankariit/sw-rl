@@ -246,7 +246,7 @@ inline void iso_rl_clock(struct iso_rl *rl) {
 }
 
 enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu) {
-	struct iso_rl_queue *q;
+	struct iso_rl_queue *q = per_cpu_ptr(rl->queue, cpu);
 	enum iso_verdict verdict;
 	s32 len, diff;
 	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
@@ -257,7 +257,6 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	}
 
 #define MIN_PKT_SIZE (600)
-	q = per_cpu_ptr(rl->queue, cpu);
 	len = (s32) skb_size(pkt);
 
 	if(q->bytes_enqueued + len > ISO_MAX_QUEUE_LEN_BYTES) {
