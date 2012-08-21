@@ -34,7 +34,7 @@ parser.add_argument('--exptid',
 parser.add_argument('--rl',
                     dest="rl",
                     help="Which rate limiter to use",
-                    choices=["htb", "hfsc", "newrl"],
+                    choices=["htb", "hfsc", "newrl", 'none'],
                     default="")
 
 parser.add_argument('--time', '-t',
@@ -75,17 +75,18 @@ class Netperf(Expt):
         self.hlist.append(self.server)
         self.hlist.append(self.client)
 
+        self.server.rmmod()
+        self.server.remove_qdiscs()
         if self.opts("rl") == "htb":
             self.server.add_htb_qdisc("5Gbit")
         elif self.opts("rl") == 'newrl':
             self.server.insmod()
-        else:
-            self.server.rmmod()
-            self.server.remove_qdiscs()
 
         self.server.start_netserver()
+        self.server.start_cpu_monitor(e(''))
         self.hlist.rmrf(e(""))
         self.hlist.mkdir(e(""))
+
         sleep(1)
         # Start the connections
         if self.opts("nrr"):
