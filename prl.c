@@ -459,7 +459,8 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 		iso_rl_clock(rl);
 	} else {
 		/* TODO: cap total_tokens and carry over the unused tokens */
-		rl->total_tokens += tokens;
+	    rl->total_tokens += tokens;
+		rl->total_tokens = min(rl->total_tokens, 65536LLU);
 	}
 
 	if(!rl->active_weight) {
