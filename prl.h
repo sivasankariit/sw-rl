@@ -42,6 +42,7 @@ struct iso_rl {
 	char name[RLNAME_MAX_CHARS];
 	/* 0 if the rl is really a "class" without a queue. */
 	int leaf;
+	int cap;
 
 	struct iso_rl *parent;
 	struct list_head siblings;

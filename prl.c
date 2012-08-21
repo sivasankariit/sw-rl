@@ -148,6 +148,7 @@ int iso_rl_init(struct iso_rl *rl) {
   INIT_LIST_HEAD(&rl->waiting_list);
   INIT_LIST_HEAD(&rl->waiting_node);
   rl->leaf = 1;
+  rl->cap = 0;
   rl->parent = NULL;
   return 0;
 }
@@ -458,18 +459,32 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 	}
 }
 
-inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
+static inline u64 _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	struct iso_rl *childrl, *rlnext;
 	unsigned long flags;
 	u32 child_share_unit, child_share;
+	u64 consumed = 0;
 
 	spin_lock_irqsave(&rl->spinlock, flags);
 	if(rl->parent == NULL) {
 		iso_rl_clock(rl);
 	} else {
-		/* TODO: cap total_tokens and carry over the unused tokens */
-	    rl->total_tokens += tokens;
-		rl->total_tokens = min(rl->total_tokens, 65536LLU);
+		/* 65536 is the maximum number of bytes that can be transmitted between timer fires */
+		/* TODO: replace 65536 with LINE_RATE * us / 8 */
+		s64 cap = 65536LL;
+		ktime_t now = ktime_get();
+		s64 extra;
+
+		if(rl->cap) {
+			cap = (rl->rate * ktime_us_delta(now, rl->last_update_time)) >> 3;
+			rl->last_update_time = now;
+		}
+		extra = cap - (s64)rl->total_tokens;
+
+		if(extra > 0) {
+			consumed = min_t(u64, extra, tokens);
+			rl->total_tokens += consumed;
+		}
 	}
 
 	if(!rl->active_weight) {
@@ -481,14 +496,17 @@ inline void _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	if(child_share_unit == 0)
 		goto unlock;
 
+	/* TODO: The correct algorithm is to repeat until rl->total_tokens
+	 * is 0, but a single pass is usually sufficient. */
 	list_for_each_entry_safe(childrl, rlnext, &rl->waiting_list, waiting_node) {
 		child_share = childrl->weight * child_share_unit;
-		rl->total_tokens -= child_share;
-		_iso_rl_fill_tokens(childrl, child_share);
+		//rl->total_tokens -= child_share;
+		rl->total_tokens -= _iso_rl_fill_tokens(childrl, child_share);
 	}
 
  unlock:
 	spin_unlock_irqrestore(&rl->spinlock, flags);
+	return consumed;
 }
 
 inline void iso_rl_fill_tokens(void) {
