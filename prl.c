@@ -473,9 +473,14 @@ static inline u64 _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 		s64 cap = 65536LL;
 		ktime_t now = ktime_get();
 		s64 extra;
+		u64 dt;
 
 		if(rl->cap) {
-			cap = (rl->rate * ktime_us_delta(now, rl->last_update_time)) >> 3;
+			dt = min_t(u64, ISO_MAX_BURST_TIME_US,
+					   ktime_us_delta(now, rl->last_update_time));
+
+			/* Don't tickle tokens faster than it should */
+			tokens = min_t(u64, tokens, (rl->rate * dt) >> 3);
 			rl->last_update_time = now;
 		}
 		extra = cap - (s64)rl->total_tokens;
