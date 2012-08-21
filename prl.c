@@ -247,6 +247,7 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	struct iso_rl_queue *q;
 	enum iso_verdict verdict;
 	s32 len, diff;
+	struct iso_rl_cb *cb = per_cpu_ptr(rlcb, q->cpu);
 
 	if(!rl->leaf) {
 		printk(KERN_INFO "bug: enqueueing into non-leaf rate limiter (%s)\n", rl->name);
@@ -272,7 +273,14 @@ enum iso_verdict iso_rl_enqueue(struct iso_rl *rl, struct sk_buff *pkt, int cpu)
 	q->bytes_enqueued += skb_size(pkt);
 
 	verdict = ISO_VERDICT_SUCCESS;
-	iso_rl_activate_queue(q);
+
+	// TODO: why are we activating the queue on every enqueue?  it
+	// activates the timer unnecessarily
+	// iso_rl_activate_queue(q);
+
+	/* TODO: add front or back of list depending on q->rl->weight */
+	if(list_empty(&q->active_list))
+		list_add_tail(&q->active_list, &cb->active_list);
  done:
 	return verdict;
 }
