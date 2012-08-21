@@ -112,7 +112,9 @@ def plot():
     plt.grid(True)
     plt.xlabel("usec")
     plt.ylabel("fraction")
-    plt.title("Total tps: %.3f / %.3fMbps IN / %.2f%%CPU" % (total_tps, total_in_mbps, total_cpu_remote / len(args.rr)))
+    title = "Total tps: %.3f / %.3fMbps IN / %.2f%%CPU" % (total_tps, total_in_mbps, total_cpu_remote / len(args.rr))
+    title += '\n(norm: %.3f Mbps/CPU%%) ' % (total_in_mbps/(total_cpu_remote/len(args.rr)))
+    plt.title(title)
     if args.ymin is not None:
         plt.ylim((args.ymin, 1))
     if args.out is None:
