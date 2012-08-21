@@ -6,7 +6,8 @@ struct iso_rl *rootrl;
 struct list_head rls;
 extern int iso_exiting;
 
-int ISO_TOKENBUCKET_TIMEOUT_NS=25*1000;
+/* MIN_BURST_BYTES / TIMEOUT_NS is the maximum rate achievable. */
+int ISO_TOKENBUCKET_TIMEOUT_NS=50*1000;
 int ISO_MAX_BURST_TIME_US=100;
 int ISO_BURST_FACTOR=8;
 int ISO_RL_UPDATE_INTERVAL_US=20;
