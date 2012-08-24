@@ -7,6 +7,7 @@ import socket
 from time import sleep
 import pexpect
 
+RL_MODULE_NAME='newrl'
 RL_MODULE = '/root/vimal/newrl.ko'
 DEFAULT_DEV = 'eth0'
 NETPERF_DIR = '/root/vimal'
@@ -153,7 +154,7 @@ class Host(object):
             return
         self.cmd("rm -rf %s" % dir)
 
-    def rmmod(self, mod=RL_MODULE):
+    def rmmod(self, mod=RL_MODULE_NAME):
         self.cmd("rmmod %s" % mod)
 
     def insmod(self, mod=RL_MODULE, params="rate=5000 dev=%s" % DEFAULT_DEV, rmmod=True):
@@ -172,7 +173,7 @@ class Host(object):
         self.rmmod()
         c  = "tc qdisc add dev %s root handle 1: htb default 1;" % iface
         c += "tc class add dev %s classid 1:1 parent 1: " % iface
-        c += "htb rate %s mtu 65000 burst 15k;" % rate
+        c += "htb rate %s mtu 1500 burst 15k;" % rate
         self.cmd(c)
 
     def killall(self, extra=""):
@@ -196,12 +197,12 @@ class Host(object):
     def start_netperf(self, args, outfile):
         self.cmd_async("%s/netperf %s 2>&1 > %s" % (NETPERF_DIR, args, outfile))
 
-    def start_n_netperfs(self, n, args, dir, outfile_prefix):
-        cmd = "for i in `seq 1 %s`; " % n
-        cmd += "  do (%s/netperf %s 2>&1 > %s/%s-$i.txt &);" % (NETPERF_DIR,
-                                                                args,
-                                                                dir,
-                                                                outfile_prefix)
+    def start_n_netperfs(self, n, args, dir, outfile_prefix, pin=False):
+        cmd = "for i in `seq 1 %s`; do (" % n
+        if pin:
+            cmd += "taskset -c $i "
+        cmd += " %s/netperf %s 2>&1" % (NETPERF_DIR, args)
+        cmd += " > %s/%s-$i.txt &);" % (dir, outfile_prefix)
         cmd += " done;"
         self.cmd(cmd)
         return
