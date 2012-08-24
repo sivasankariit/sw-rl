@@ -12,7 +12,7 @@ int ISO_MAX_BURST_TIME_US=100;
 int ISO_BURST_FACTOR=8;
 int ISO_RL_UPDATE_INTERVAL_US=20;
 int ISO_RATE_INITIAL=1000;
-int ISO_MAX_QUEUE_LEN_BYTES=256 * 1024;
+int ISO_MAX_QUEUE_LEN_BYTES=1024 * 1024;
 int ISO_MIN_BURST_BYTES=65536;
 
 /* Called the first time when the module is initialised */
