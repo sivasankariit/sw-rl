@@ -8,10 +8,21 @@ from time import sleep
 from host import *
 
 parser = argparse.ArgumentParser(description="Netperf Test for various rate limiters.")
+parser.add_argument('--proto',
+                    dest="proto",
+                    choices=["tcp","udp"],
+                    default="tcp")
+
 parser.add_argument('--nstream',
                     dest="ns",
                     type=int,
                     help="Number of TCP_STREAM flows.",
+                    default=4)
+
+parser.add_argument('--ssize',
+                    dest="ssize",
+                    type=int,
+                    help="Size for stream flows.",
                     default=4)
 
 parser.add_argument('--nrr',
@@ -19,6 +30,12 @@ parser.add_argument('--nrr',
                     type=int,
                     help="Number of TCP_RR flows.",
                     default=512)
+
+parser.add_argument('--rrsize',
+                    dest="rrsize",
+                    type=int,
+                    help="Req and resp size for RR.",
+                    default=1)
 
 parser.add_argument('--pin',
                     dest="pin",
@@ -53,7 +70,7 @@ parser.add_argument('--hosts',
                     dest="hosts",
                     help="The two hosts (client/server) to run tests",
                     nargs="+",
-                    default=["xlh7","xlh6"])
+                    default=["xlh5","xlh6"])
 
 args = parser.parse_args()
 
@@ -75,12 +92,12 @@ class Netperf(Expt):
         self.hlist.append(self.server)
         self.hlist.append(self.client)
 
-        self.server.rmmod()
-        self.server.remove_qdiscs()
+        self.hlist.rmmod()
+        self.hlist.remove_qdiscs()
         if self.opts("rl") == "htb":
-            self.server.add_htb_qdisc("5Gbit")
+            self.client.add_htb_qdisc("5Gbit")
         elif self.opts("rl") == 'newrl':
-            self.server.insmod()
+            self.client.insmod()
 
         self.server.start_netserver()
         self.server.start_cpu_monitor(e(''))
@@ -90,13 +107,19 @@ class Netperf(Expt):
         sleep(1)
         # Start the connections
         if self.opts("nrr"):
-            opts = "-v 2 -t TCP_RR -H %s -l %s -c -C" % (self.server.hostname(),
-                                                         self.opts("t"))
+            opts = "-t %s_RR" % self.opts("proto").upper()
+            opts += " -v 2 -H %s -l %s -c -C" % (self.server.hostname(),
+                                                 self.opts("t"))
+            opts += " -- -r %s,%s " % (self.opts("rrsize"), self.opts("rrsize"))
             self.client.start_n_netperfs(self.opts("nrr"), opts, e(''), "rr")
 
         if self.opts("ns"):
-            opts = "-t TCP_STREAM -H %s -l %s -c -C" % (self.server.hostname(),
-                                                        self.opts("t"))
+            opts = "-t %s_STREAM" % (self.opts("proto").upper())
+            opts += " -v 2 -H %s -l %s -c -C" % (self.server.hostname(),
+                                                 self.opts("t"))
+            opts += " -- -s %s " % self.opts("ssize")
+            if self.opts("proto") == "tcp":
+                opts += " -D " # disable nagle's
             self.client.start_n_netperfs(self.opts("ns"), opts, e(''), "stream")
         return
 
