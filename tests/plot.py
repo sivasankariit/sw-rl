@@ -47,8 +47,10 @@ class RRParser:
     def __init__(self, filename):
         self.filename = filename
         self.lines = open(filename).readlines()
+        self.done = False
         try:
             self.parse()
+            self.done = True
         except:
             print 'error parsing %s' % filename
 
@@ -97,6 +99,8 @@ def plot():
         return
     for f in args.rr:
         r = RRParser(f)
+        if not r.done:
+            continue
         c = cdf(r.histogram)
         combine(r.histogram)
         plot_cdf(c[0], c[1], alpha=0.1)
