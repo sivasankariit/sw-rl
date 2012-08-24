@@ -36,7 +36,7 @@ void iso_tx_hook_exit(void);
 static void test(void) {
   char name[32];
   int i;
-  ntestrls = 4;
+  ntestrls = 128;
   for(i = 0; i < ntestrls; i++) {
     sprintf(name, "rl%d", i);
     testrls[i] = iso_rl_new(name);
@@ -98,7 +98,7 @@ static int iso_init() {
 		goto out;
 	}
 
-	test();
+	//test();
 	ret = 0;
 
  out:

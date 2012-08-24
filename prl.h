@@ -76,7 +76,6 @@ extern struct list_head rls;
 extern int ISO_TOKENBUCKET_TIMEOUT_NS;
 extern int ISO_MAX_BURST_TIME_US;
 extern int ISO_BURST_FACTOR;
-extern int ISO_RL_UPDATE_INTERVAL_US;
 extern int ISO_RATE_INITIAL;
 extern int ISO_MAX_QUEUE_LEN_BYTES;
 extern int ISO_MIN_BURST_BYTES;

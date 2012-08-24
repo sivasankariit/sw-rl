@@ -83,12 +83,12 @@ unsigned int hook_out_func(unsigned int hooknum,
 
 	/* TODO: better classification */
 	iph = ip_hdr(skb);
-	rl = testrls[0];
+	rl = rootrl; //testrls[0];
 
 	if(iph->protocol == IPPROTO_TCP) {
 		tcph = tcp_hdr(skb);
 		port = ntohs(tcph->source) % ntestrls;
-		rl = testrls[port];
+		//rl = testrls[port];
 
 		/* Safety against useless screwups; allow ssh packets to pass thru */
 		if(tcph->source == __constant_htons(22) || tcph->dest == __constant_htons(22))
