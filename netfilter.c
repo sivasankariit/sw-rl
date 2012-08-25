@@ -88,11 +88,13 @@ unsigned int hook_out_func(unsigned int hooknum,
 	if(iph->protocol == IPPROTO_TCP) {
 		tcph = tcp_hdr(skb);
 		port = ntohs(tcph->source) % ntestrls;
-		//rl = testrls[port];
+		rl = testrls[port];
 
 		/* Safety against useless screwups; allow ssh packets to pass thru */
 		if(tcph->source == __constant_htons(22) || tcph->dest == __constant_htons(22))
 			return NF_ACCEPT;
+	} else {
+	  return NF_ACCEPT;
 	}
 
 	rcu_read_lock_bh();
