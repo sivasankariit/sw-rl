@@ -98,7 +98,7 @@ static int iso_init() {
 		goto out;
 	}
 
-	//test();
+	test();
 	ret = 0;
 
  out:
