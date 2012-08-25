@@ -372,7 +372,7 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 	u64 borrow;
 	int timeout = 1;
 
-	if(!spin_trylock_irqsave(&rl->spinlock, flags))
+	if(!spin_trylock(&rl->spinlock))
 		return timeout;
 
 	borrow = max(iso_rl_singleq_burst(rl), (u64)q->first_pkt_size);
@@ -386,7 +386,7 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 	if(iso_exiting)
 		timeout = 0;
 
-	spin_unlock_irqrestore(&rl->spinlock, flags);
+	spin_unlock(&rl->spinlock);
 	return timeout;
 }
 
@@ -413,7 +413,7 @@ inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 		q->waiting = 1;
 		done = 0;
 		do {
-			spin_lock_irqsave(&parent->spinlock, flags);
+			spin_lock(&parent->spinlock);
 			rl->waiting += 1;
 			if(rl->waiting == 1) {
 				parent->active_weight += rl->weight;
@@ -423,7 +423,7 @@ inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 				 * already be present in its parent's waiting list */
 				done = 1;
 			}
-			spin_unlock_irqrestore(&parent->spinlock, flags);
+			spin_unlock(&parent->spinlock);
 			rl = parent;
 			parent = rl->parent;
 		} while(!done && parent);
@@ -439,7 +439,7 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 		done = 0;
 
 		do {
-			spin_lock_irqsave(&parent->spinlock, flags);
+			spin_lock(&parent->spinlock);
 			rl->waiting -= 1;
 			if(rl->waiting == 0) {
 				parent->active_weight -= rl->weight;
@@ -449,7 +449,7 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 				 * remove parent from the tree */
 				done = 1;
 			}
-			spin_unlock_irqrestore(&rl->parent->spinlock, flags);
+			spin_unlock(&rl->parent->spinlock);
 
 			rl = parent;
 			parent = rl->parent;
@@ -463,7 +463,7 @@ static inline u64 _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	u32 child_share_unit, child_share;
 	u64 consumed = 0;
 
-	spin_lock_irqsave(&rl->spinlock, flags);
+	spin_lock(&rl->spinlock);
 	if(rl->parent == NULL) {
 		iso_rl_clock(rl);
 	} else {
@@ -508,7 +508,7 @@ static inline u64 _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	}
 
  unlock:
-	spin_unlock_irqrestore(&rl->spinlock, flags);
+	spin_unlock(&rl->spinlock);
 	return consumed;
 }
 
