@@ -8,6 +8,7 @@ extern int iso_exiting;
 
 /* MIN_BURST_BYTES / TIMEOUT_NS is the maximum rate achievable. */
 int ISO_TOKENBUCKET_TIMEOUT_NS=50*1000;
+int ISO_RLS_REFRESH_US=50;
 int ISO_MAX_BURST_TIME_US=100;
 int ISO_BURST_FACTOR=8;
 int ISO_RATE_INITIAL=1000;
@@ -368,7 +369,6 @@ enum hrtimer_restart iso_rl_timeout(struct hrtimer *timer) {
 /* TODO: i think this function can be replaced with a simple
  * atomic_dec_if_greater or equivalent */
 inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
-	unsigned long flags;
 	u64 borrow;
 	int timeout = 1;
 
@@ -376,6 +376,8 @@ inline int iso_rl_borrow_tokens(struct iso_rl *rl, struct iso_rl_queue *q) {
 		return timeout;
 
 	borrow = max(iso_rl_singleq_burst(rl), (u64)q->first_pkt_size);
+	// TODO: explore if we can borrow everything
+	//borrow = rl->total_tokens;
 
 	if(rl->total_tokens >= borrow) {
 		rl->total_tokens -= borrow;
@@ -406,7 +408,7 @@ inline void iso_rl_deactivate_queue(struct iso_rl_queue *q) {
 }
 
 inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
-	unsigned long flags, done;
+	int done;
 	struct iso_rl *parent = rl->parent;
 
 	if(!q->waiting && parent) {
@@ -431,7 +433,7 @@ inline void iso_rl_activate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 }
 
 inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
-	unsigned long flags, done;
+	int done;
 	struct iso_rl *parent = rl->parent;
 
 	if(q->waiting && parent) {
@@ -459,7 +461,6 @@ inline void iso_rl_deactivate_tree(struct iso_rl *rl, struct iso_rl_queue *q) {
 
 static inline u64 _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 	struct iso_rl *childrl, *rlnext;
-	unsigned long flags;
 	u32 child_share_unit, child_share;
 	u64 consumed = 0;
 
@@ -515,7 +516,11 @@ static inline u64 _iso_rl_fill_tokens(struct iso_rl *rl, u64 tokens) {
 inline void iso_rl_fill_tokens(void) {
 	/* Needn't execute this simultaneously on all CPUs */
 	static unsigned long flags = 0;
-	if(!test_and_set_bit(0, &flags)) {
+	static ktime_t last;
+
+	ktime_t now = ktime_get();
+	if(ktime_us_delta(now, last) > ISO_RLS_REFRESH_US && !test_and_set_bit(0, &flags)) {
+		last = now;
 		_iso_rl_fill_tokens(rootrl, 0);
 		clear_bit(0, &flags);
 	}
