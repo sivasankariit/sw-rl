@@ -1,0 +1,33 @@
+prl: new rate limiter with parallelized transmit path
+
+(if you have suggestions for a better name, please let me know :-))
+
+prl is a simple, low-overhead token bucket rate limiter with a
+parallel transmit path.  The goal is to retain HTB functionality as
+much as possible, except its performance hit.
+
+These rate limiters were originally designed for the EyeQ project [1]
+and is now stripped out as a standalone kernel module.  Right now,
+it's not a qdisc, but we'll get there eventually, hopefully as a
+drop-in replacement for htb.
+
+[1] https://www.usenix.org/conference/hotcloud12/eyeq-practical-network-performance-isolation-multi-tenant-cloud
+
+Design doc to come soon, but if you want to play with it, just type
+"make" and it should build a kernel module newrl.ko.
+
+To insert: insmod newrl.ko rate=1000 dev=ethx
+
+Right now, the above command (see main.c) creates a static
+configuration with 1 root rate limiter and 1 leaf, attached to root,
+with a static rate limit of 1000 Mb/s.  Since it uses netfilter, it
+will rate limit ONLY IP traffic exiting via ethx.
+
+User-space configuration will be available soon.
+
+You can check /proc/prl_stats to see some statistics about the rate
+limiters.  It will show per-cpu queue occupancies, number of tokens,
+and also the hierarchy.
+
+--
+Vimal
