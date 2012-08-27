@@ -70,7 +70,7 @@ parser.add_argument('--hosts',
                     dest="hosts",
                     help="The two hosts (client/server) to run tests",
                     nargs="+",
-                    default=["xlh5","xlh6"])
+                    default=["xlh4","xlh5"])
 
 args = parser.parse_args()
 
