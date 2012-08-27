@@ -6,11 +6,17 @@ import re
 from collections import defaultdict
 import matplotlib as mp
 import matplotlib.pyplot as plt
+import glob
+import os
+import numpy
 
 parser = argparse.ArgumentParser(description="Plot netperf experiment outputs.")
 parser.add_argument('--rr',
                     nargs="+",
                     help="rr files to parse")
+
+parser.add_argument('--ss-dir',
+                    help="stream output directories")
 
 parser.add_argument('--out', '-o',
                     help="save plot to file")
@@ -42,6 +48,26 @@ def plot_cdf(x, y, **opts):
     if args.xlog:
         plt.xscale("log")
     #plt.show()
+
+
+class STParser:
+    def __init__(self, filename):
+        self.filename = filename
+        self.lines = open(filename).readlines()
+        self.done = False
+        try:
+            self.parse()
+            self.done = True
+        except:
+            print 'error parsing %s' % filename
+        return
+
+    def parse(self):
+        mbps_line = self.lines[6]
+        fields = rspaces.split(mbps_line)
+        self.mbps = float(fields[5])
+        self.cpu_local = float(fields[6])
+        return
 
 class RRParser:
     def __init__(self, filename):
@@ -87,7 +113,26 @@ class RRParser:
         self.histogram = ret
         return ret
 
-def plot():
+def parse_st(dir):
+    total_mbps = 0.0
+    total_cpu_local = 0.0
+    num_files = 0
+    for f in glob.glob(os.path.join("%s/*" % dir)):
+        r = STParser(f)
+        if not r.done:
+            continue
+        total_mbps += r.mbps
+        total_cpu_local += r.cpu_local
+        num_files += 1
+    avg_cpu_local = total_cpu_local / num_files
+    return (dir, total_mbps, avg_cpu_local)
+
+def plot_vbar(heights, start, skip, **kwargs):
+    N = len(heights)
+    xs = start + skip * numpy.arange(0, N)
+    plt.bar(xs, heights, width=1, **kwargs)
+
+def plot_rr():
     hist = defaultdict(int)
     total_tps = 0
     total_out_mbps = 0
@@ -127,4 +172,28 @@ def plot():
         print 'saved to %s' % args.out
         plt.savefig(args.out)
 
-plot()
+if args.rr:
+    plot_rr()
+else:
+    colours = dict(none="green", htb="red", newrl="blue")
+    rls = ["htb", "newrl", "none"]
+    ssizes = [64, 128, 256, 512, 1440, 32000]
+    for start,rl in enumerate(rls):
+        ys = []
+        for ssize in ssizes:
+            dir = "rl-%s-ssize-%s" % (rl, ssize)
+            if not os.path.exists(os.path.join(args.ss_dir, dir)):
+                continue
+            _, mbps, cpu = parse_st(dir)
+            print _, mbps, cpu
+            ys.append(mbps/cpu)
+        plot_vbar(ys, start, skip=4, color=colours[rl])
+    L = len(rls)
+    xticks = L/2.0 + (L+1) * numpy.arange(0, len(ssizes))
+    xticklabels = map(lambda e: str(e), ssizes)
+    plt.xticks(xticks, xticklabels)
+    plt.ylabel("Mb/s per CPU%")
+    plt.xlabel("Packet sizes")
+    plt.title("Normalized CPU usage per Mb/s")
+    plt.grid(True)
+    plt.show()
